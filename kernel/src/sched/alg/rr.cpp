@@ -30,17 +30,12 @@ void round_robin::remove_from_runqueue(tcb &tcb)
 }
 
 tcb *round_robin::select_next_task(tcb *current) {
-	// If current task should continue running, add it back to queue
-	if (current != nullptr){
-		add_to_runqueue(*current);
-	}
-
     // Get the next task from the queue
     if (runtime_queue.empty()){
 		return nullptr;
 	}
 
-	tcb *next = runtime_queue.first();
-    runtime_queue.pop();
-	return next;
+	tcb* task = runtime_queue.pop();
+	runtime_queue.append(task);
+	return runtime_queue.last();
 }
