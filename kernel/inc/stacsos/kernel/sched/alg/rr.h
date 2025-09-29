@@ -17,6 +17,7 @@ namespace stacsos::kernel::sched::alg {
 
 class round_robin : public scheduling_algorithm {
 private:
+	// Contains all of the thread control blocks that are currently awaiting for CPU time. 
 	list<tcb*> runtime_queue;
 
 public:
