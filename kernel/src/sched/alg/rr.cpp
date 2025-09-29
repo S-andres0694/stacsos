@@ -58,8 +58,9 @@ void round_robin::remove_from_runqueue(tcb &tcb)
  *
  * @param current - The task which is currently running. It is ignored in this function because in our given documentation
  * 					the current task has no role to play. In a more advanced algorithm, we would determine a quantum time
- * 					to run. If it finished during said time, then it leaves the system. If not, it would go back to the end of the queue. 
- * @return tcb* - A pointer to the task that is going to be ran next. 
+ * 					to run. If it finished during said time, then it leaves the system. If not, it would go back to the end of the queue.
+ * 					Sourced all of my research about the algorithm from here: https://www.geeksforgeeks.org/operating-systems/round-robin-scheduling-in-operating-system/
+ * @return tcb* - A pointer to the task that is going to be ran next.
  */
 
 tcb *round_robin::select_next_task(tcb *current)
