@@ -18,15 +18,19 @@ using namespace stacsos::kernel::sched::alg;
 /**
  * @brief Adds a process to the runnable threads queue.
  *
- * I made the assumption that if the thread control block was null, it should not be added
- * as it might be a useless node and could cause issues within the code.
+ * Since the parameter is a reference, it is impossible for it to be `null`. Therefore, no check is required.
  *
- * @param tcb - Thread Control Block malloced object. As previously mentioned, if the object is null, it is not placed upon the runqueue.
+ * @param tcb - Thread Control Block malloced object. 
  */
 
 void round_robin::add_to_runqueue(tcb &tcb)
 {		
-	// No null check because the compiler can guarantee that the pointer is actually referencing something. (-Waddress)
+	if (&tcb == nullptr){
+		return;
+	}
+
+	// No null check because the compiler can guarantee that the pointer is actually referencing something since 
+	// the parameter is a reference (-Waddress)
 	runtime_queue.enqueue(&tcb);
 }
 
@@ -60,7 +64,7 @@ void round_robin::remove_from_runqueue(tcb &tcb)
  * 					the current task has no role to play. In a more advanced algorithm, we would determine a quantum time
  * 					to run. If it finished during said time, then it leaves the system. If not, it would go back to the end of the queue.
  * 					Sourced all of my research about the algorithm from here: https://www.geeksforgeeks.org/operating-systems/round-robin-scheduling-in-operating-system/
- * @return tcb* - A pointer to the task that is going to be ran next.
+ * @return tcb* - A pointer to the task that is going to be ran next. Not used because of the aforementioned reasons.
  */
 
 tcb *round_robin::select_next_task(tcb *current)
@@ -70,8 +74,14 @@ tcb *round_robin::select_next_task(tcb *current)
 	the function itself does not seem to handle the edge case.
 	 */
 
+	// There are no runnable threads waiting for time, should just return. 
 	if (runtime_queue.empty()) {
 		return nullptr;
+	}
+
+	// Small optimization for shorter runtime if the list has just one member.
+	if (runtime_queue.count() == 1) {
+		return runtime_queue.first();
 	}
 
 	return runtime_queue.rotate();
