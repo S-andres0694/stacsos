@@ -5,6 +5,7 @@
  * Copyright (c) University of St Andrews 2024, 2025
  * Tom Spink <tcs6@st-andrews.ac.uk>
  */
+#include <csignal>
 #include <stacsos/kernel/debug.h>
 #include <stacsos/kernel/mem/page-allocator-buddy.h>
 #include <stacsos/kernel/mem/page.h>
@@ -70,7 +71,41 @@ void page_allocator_buddy::dump() const
  * @param range_start The first page in the range.
  * @param page_count The number of pages in the range.
  */
-void page_allocator_buddy::insert_free_pages(page &range_start, u64 page_count) { panic("TODO"); }
+void page_allocator_buddy::insert_free_pages(page &range_start, u64 page_count)
+{
+	// Make sure that the amount of pages being inserted is non-zero.
+	assert(page_count > 0);
+
+	page *current_page = &range_start;
+
+	// The idea is to basically dynamically convert each page range into its
+	// corresponding block with the intention of inserting them into the free
+	// list.
+	for (int curr_order = LastOrder; curr_order >= 0; curr_order--) {
+		u8 block_size = block_size_per_order(curr_order);
+		while (block_aligned(curr_order, current_page->pfn()) && page_count >= block_size) {
+			// By checking if the block starting from the current page is aligned
+			// and that there are enough pages to insert based on the block size
+			// I can insert the block of pages starting from the current page.
+			insert_free_block(curr_order, *current_page);
+
+			// For optimizations, I make sure to attempt a coalescence in the order
+			// which makes sure that fragmentation is as small as possible and that
+			// we have the biggest amount of large continuous blocks.
+			merge_buddies(curr_order, *current_page);
+
+			// Then, I get the next starting page of the next block by adding the
+			// current block size (the amount of pages we inserted) to the PFN of
+			// the current starting page.
+			current_page = &page::get_from_pfn(current_page->pfn() + block_size);
+			page_count -= block_size;
+		}
+	}
+
+	// Final update to the metadata, as we added all of the
+	// free pages back to the allocator.
+	total_free_ += page_count;
+}
 
 /**
  * @brief Inserts a block of pages into the free list for the given order.
@@ -158,7 +193,36 @@ void page_allocator_buddy::split_block(int order, page &block_start) { panic("TO
  * @param order The order in which to merge buddies.
  * @param buddy Either buddy page in the free block.
  */
-void page_allocator_buddy::merge_buddies(int order, page &buddy) { panic("TODO"); }
+void page_allocator_buddy::merge_buddies(int order, page &buddy)
+{
+	// Function cannot be called with an invalid order.
+	assert(0 < order && order < LastOrder);
+
+	// We know that the page that was given has
+	// to be free if is going to be merged
+	// as said by the spec (Page 4).
+
+	// Get the buddy candidate.
+	page &other_buddy = page::get_from_pfn(calculate_other_buddy_pfn(order, buddy.pfn()));
+
+	// I make a series of checks to make sure that the candidate and
+	// passed block are actually buddies.
+
+	// They must both be aligned to the passed order.
+	assert(block_aligned(order, buddy.pfn()) && block_aligned(order, other_buddy.pfn()));
+
+	// Because they are going to be merged, they can no longer be free.
+	remove_free_block(order, buddy);
+	remove_free_block(order, other_buddy);
+
+	// Create the newly merged block by choosing the starting page
+	// based on the smallest PFN.
+	u64 merged_pfn = (buddy.pfn() < other_buddy.pfn()) ? buddy.pfn() : other_buddy.pfn(); 
+	page &merged_block = page::get_from_pfn(merged_pfn);
+
+	//Insert the merged block into the next higher order 
+	insert_free_block(order + 1, merged_block);
+}
 
 /**
  * @brief Allocates pages, using the buddy algorithm.
@@ -178,3 +242,23 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
  * @param order The order of the block being freed.
  */
 void page_allocator_buddy::free_pages(page &block_start, int order) { panic("TODO"); }
+
+/**
+ * @brief Calculates the size of the block based on the current order.
+ * I employed a bitwise shift operation because it is more performant than
+ * a multiplication.
+ *
+ * @param order - the order for which the calculation is going to be done.
+ * @return u8 the amount of pages that can go inside of the block.
+ */
+
+u8 page_allocator_buddy::block_size_per_order(int order) { return 1 << order; }
+
+/**
+ * @brief Calculates the PFN of the other buddy in the same order.
+ *
+ * @param order The order of the block.
+ * @param buddy_pfn The PFN of the given buddy block.
+ * @return The PFN of the other buddy block.
+ */
+static u64 calculate_other_buddy_pfn(int order, u64 buddy_pfn) { return buddy_pfn ^ (1 << order); }
