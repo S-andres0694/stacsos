@@ -5,7 +5,6 @@
  * Copyright (c) University of St Andrews 2024, 2025
  * Tom Spink <tcs6@st-andrews.ac.uk>
  */
-#include <csignal>
 #include <stacsos/kernel/debug.h>
 #include <stacsos/kernel/mem/page-allocator-buddy.h>
 #include <stacsos/kernel/mem/page.h>
@@ -261,4 +260,4 @@ u8 page_allocator_buddy::block_size_per_order(int order) { return 1 << order; }
  * @param buddy_pfn The PFN of the given buddy block.
  * @return The PFN of the other buddy block.
  */
-static u64 calculate_other_buddy_pfn(int order, u64 buddy_pfn) { return buddy_pfn ^ (1 << order); }
+u64 page_allocator_buddy::calculate_other_buddy_pfn(int order, u64 buddy_pfn) { return buddy_pfn ^ (1 << order); }
