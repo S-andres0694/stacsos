@@ -81,7 +81,7 @@ void page_allocator_buddy::insert_free_pages(page &range_start, u64 page_count)
 	// corresponding block with the intention of inserting them into the free
 	// list.
 	for (int curr_order = LastOrder; curr_order >= 0; curr_order--) {
-		u8 block_size = block_size_per_order(curr_order);
+		u64 block_size = pages_per_block(curr_order);
 		while (block_aligned(curr_order, current_page->pfn()) && page_count >= block_size) {
 			// By checking if the block starting from the current page is aligned
 			// and that there are enough pages to insert based on the block size
@@ -183,7 +183,36 @@ void page_allocator_buddy::remove_free_block(int order, page &block_start)
  * @param order The order in which the free block current exists.
  * @param block_start The starting page of the block to be split.
  */
-void page_allocator_buddy::split_block(int order, page &block_start) { panic("TODO"); }
+void page_allocator_buddy::split_block(int order, page &block_start)
+{
+	// Function cannot be called with an invalid order.
+	assert(0 < order && order <= LastOrder);
+
+	// We know that this function can only be called internally
+	// when there is a free block available to be split as the
+	// as the function is private.
+
+	// Make sure that the block to be split is aligned to
+	// the passed order.
+	assert(block_aligned(order, block_start.pfn()));
+
+	// Calculate the PFNs of the two resulting buddy blocks
+	// after the split.
+	u64 first_buddy_pfn = block_start.pfn();
+	u64 second_buddy_pfn = block_start.pfn() + (1 << (order - 1)); // Half the current block size
+
+	// Get the starting page references of each buddy block.
+	page &first_buddy = page::get_from_pfn(first_buddy_pfn);
+	page &second_buddy = page::get_from_pfn(second_buddy_pfn);
+
+	// Remove the original block from the free list
+	remove_free_block(order, block_start);
+
+	// Insert the two smaller blocks into the next lower order,
+	// completing the split.
+	insert_free_block(order - 1, first_buddy);
+	insert_free_block(order - 1, second_buddy);
+}
 
 /**
  * @brief Merges two buddy-adjacent free blocks in one order, into a block in the next higher order.
@@ -195,7 +224,7 @@ void page_allocator_buddy::split_block(int order, page &block_start) { panic("TO
 void page_allocator_buddy::merge_buddies(int order, page &buddy)
 {
 	// Function cannot be called with an invalid order.
-	assert(0 < order && order < LastOrder);
+	assert(0 < order && order <= LastOrder);
 
 	// We know that the page that was given has
 	// to be free if is going to be merged
@@ -204,11 +233,11 @@ void page_allocator_buddy::merge_buddies(int order, page &buddy)
 	// Get the buddy candidate.
 	page &other_buddy = page::get_from_pfn(calculate_other_buddy_pfn(order, buddy.pfn()));
 
-	// I make a series of checks to make sure that the candidate and
-	// passed block are actually buddies.
-
 	// They must both be aligned to the passed order.
 	assert(block_aligned(order, buddy.pfn()) && block_aligned(order, other_buddy.pfn()));
+
+	// Make sure that the buddy being merged is actually free.
+	assert(is_buddy_free(order, other_buddy.pfn()));
 
 	// Because they are going to be merged, they can no longer be free.
 	remove_free_block(order, buddy);
@@ -216,10 +245,10 @@ void page_allocator_buddy::merge_buddies(int order, page &buddy)
 
 	// Create the newly merged block by choosing the starting page
 	// based on the smallest PFN.
-	u64 merged_pfn = (buddy.pfn() < other_buddy.pfn()) ? buddy.pfn() : other_buddy.pfn(); 
+	u64 merged_pfn = (buddy.pfn() < other_buddy.pfn()) ? buddy.pfn() : other_buddy.pfn();
 	page &merged_block = page::get_from_pfn(merged_pfn);
 
-	//Insert the merged block into the next higher order 
+	// Insert the merged block into the next higher order
 	insert_free_block(order + 1, merged_block);
 }
 
@@ -240,18 +269,36 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
  * @param block_start The starting page of the block to be freed.
  * @param order The order of the block being freed.
  */
-void page_allocator_buddy::free_pages(page &block_start, int order) { panic("TODO"); }
+void page_allocator_buddy::free_pages(page &block_start, int order)
+{
+	// Ensure that the passed order is valid.
+	assert(order >= 0 && order <= LastOrder); 
 
-/**
- * @brief Calculates the size of the block based on the current order.
- * I employed a bitwise shift operation because it is more performant than
- * a multiplication.
- *
- * @param order - the order for which the calculation is going to be done.
- * @return u8 the amount of pages that can go inside of the block.
- */
+	// Ensure that the starting page is aligned to the block size.
+	assert(block_aligned(order, block_start.pfn())); 
 
-u8 page_allocator_buddy::block_size_per_order(int order) { return 1 << order; }
+	page *current_block = &block_start;
+
+	// To ensure that fragmentation is minimized, coalesce with buddy as long as possible
+	while (order < LastOrder) {
+		// Get the other buddy page
+		page &buddy = page::get_from_pfn(calculate_other_buddy_pfn(order, current_block->pfn()));
+
+		// Ensure that the buddy is free and aligned
+		if (!block_aligned(order, buddy.pfn()) || !is_buddy_free(order, buddy.pfn())) {
+			break;
+		}
+
+		// Merge with the buddy since we have already confirmed it is free
+		merge_buddies(order, *current_block);	
+
+		// Update the current block to be the merged block
+		order++;
+	}
+	
+	// Finally, insert the (possibly merged) block back into the free list
+	insert_free_block(order, *current_block);
+}
 
 /**
  * @brief Calculates the PFN of the other buddy in the same order.
@@ -261,3 +308,15 @@ u8 page_allocator_buddy::block_size_per_order(int order) { return 1 << order; }
  * @return The PFN of the other buddy block.
  */
 u64 page_allocator_buddy::calculate_other_buddy_pfn(int order, u64 buddy_pfn) { return buddy_pfn ^ (1 << order); }
+
+/**
+ * @brief Checks if the buddy block is free.
+ *
+ * @param order The order of the block.
+ * @param buddy_pfn The PFN of the given buddy block.
+ * @return true if the buddy is free, false otherwise.
+ */
+bool page_allocator_buddy::is_buddy_free(int order, u64 buddy_pfn){
+	page &buddy = page::get_from_pfn(buddy_pfn);
+	return metadata(&buddy)->next_free != nullptr;
+}

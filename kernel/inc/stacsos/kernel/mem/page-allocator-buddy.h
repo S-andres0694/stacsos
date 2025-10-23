@@ -42,7 +42,7 @@ private:
 
 	void split_block(int order, page &block_start);
 	void merge_buddies(int order, page &buddy);
-	u8 block_size_per_order(int order);
 	static u64 calculate_other_buddy_pfn(int order, u64 buddy_pfn);
+	static bool is_buddy_free(int order, u64 buddy_pfn);
 };
 } // namespace stacsos::kernel::mem
