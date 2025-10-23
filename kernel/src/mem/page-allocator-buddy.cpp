@@ -72,6 +72,8 @@ void page_allocator_buddy::dump() const
  */
 void page_allocator_buddy::insert_free_pages(page &range_start, u64 page_count)
 {
+	dprintf("Inserting %llu free pages starting at PFN %llu\n", page_count, range_start.pfn());
+
 	// Make sure that the amount of pages being inserted is non-zero.
 	assert(page_count > 0);
 
@@ -91,7 +93,9 @@ void page_allocator_buddy::insert_free_pages(page &range_start, u64 page_count)
 			// For optimizations, I make sure to attempt a coalescence in the order
 			// which makes sure that fragmentation is as small as possible and that
 			// we have the biggest amount of large continuous blocks.
-			merge_buddies(curr_order, *current_page);
+			if (curr_order < LastOrder && is_buddy_free(curr_order, calculate_other_buddy_pfn(curr_order, current_page->pfn()))) {
+				merge_buddies(curr_order, *current_page);
+			}
 
 			// Then, I get the next starting page of the next block by adding the
 			// current block size (the amount of pages we inserted) to the PFN of
@@ -149,6 +153,8 @@ void page_allocator_buddy::insert_free_block(int order, page &block_start)
  */
 void page_allocator_buddy::remove_free_block(int order, page &block_start)
 {
+	dprintf("Removing free block at PFN %lu, order %d\n", block_start.pfn(), order);
+
 	// Assert that the given order is in the range of orders we support.
 	assert(order >= 0 && order <= LastOrder);
 
@@ -223,8 +229,10 @@ void page_allocator_buddy::split_block(int order, page &block_start)
  */
 void page_allocator_buddy::merge_buddies(int order, page &buddy)
 {
+	dprintf("Merging buddies at order %d, buddy PFN: %lu\n", order, buddy.pfn());
+
 	// Function cannot be called with an invalid order.
-	assert(0 < order && order <= LastOrder);
+	assert(0 <= order && order <= LastOrder);
 
 	// We know that the page that was given has
 	// to be free if is going to be merged
@@ -299,9 +307,8 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
 		}
 	}
 
-	// If no suitable block was found, panic as the 
-	// allocation has failed. 
-	panic("Buddy allocator: Unable to satisfy page allocation request");
+	// If no suitable block was found, print a message as the allocation has failed.
+	dprintf("Buddy allocator: Unable to satisfy page allocation request\n");
 	return nullptr;
 }
 
@@ -314,33 +321,32 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
  */
 void page_allocator_buddy::free_pages(page &block_start, int order)
 {
-	// Ensure that the passed order is valid.
-	assert(order >= 0 && order <= LastOrder);
+	dprintf("Freeing pages starting at PFN %lu, order %d\n", block_start.pfn(), order);
 
-	// Ensure that the starting page is aligned to the block size.
+	assert(order >= 0 && order <= LastOrder);
 	assert(block_aligned(order, block_start.pfn()));
 
 	page *current_block = &block_start;
 
-	// To ensure that fragmentation is minimized, coalesce with buddy as long as possible
+	// Insert the block into the free list first
+	insert_free_block(order, *current_block);
+
+	// Try to coalesce with buddy as long as possible
 	while (order < LastOrder) {
-		// Get the other buddy page
 		page &buddy = page::get_from_pfn(calculate_other_buddy_pfn(order, current_block->pfn()));
 
-		// Ensure that the buddy is free and aligned
 		if (!block_aligned(order, buddy.pfn()) || !is_buddy_free(order, buddy.pfn())) {
 			break;
 		}
 
-		// Merge with the buddy since we have already confirmed it is free
+		// Merge with buddy
 		merge_buddies(order, *current_block);
 
-		// Update the current block to be the merged block
+		// After merging, update current_block to the merged block
+		u64 merged_pfn = (current_block->pfn() < buddy.pfn()) ? current_block->pfn() : buddy.pfn();
+		current_block = &page::get_from_pfn(merged_pfn);
 		order++;
 	}
-
-	// Finally, insert the (possibly merged) block back into the free list
-	insert_free_block(order, *current_block);
 }
 
 /**
@@ -361,6 +367,11 @@ u64 page_allocator_buddy::calculate_other_buddy_pfn(int order, u64 buddy_pfn) { 
  */
 bool page_allocator_buddy::is_buddy_free(int order, u64 buddy_pfn)
 {
-	page &buddy = page::get_from_pfn(buddy_pfn);
-	return metadata(&buddy)->next_free != nullptr;
+	page *current = free_list_[order];
+	while (current) {
+		if (current->pfn() == buddy_pfn)
+			return true;
+		current = metadata(current)->next_free;
+	}
+	return false;
 }

@@ -26,6 +26,12 @@ kernel-args ?=
 all: $(build-targets)
 clean: $(clean-targets)
 
+test-allocator:
+	@make run kernel-args="pgalloc=buddy pgalloc-selftest=yes"
+
+test-allocator-no-self-test:
+	@make run kernel-args="pgalloc=buddy"	
+
 run: all
 	$(qemu) \
 		-smp 4 \
