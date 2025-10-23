@@ -72,8 +72,6 @@ void page_allocator_buddy::dump() const
  */
 void page_allocator_buddy::insert_free_pages(page &range_start, u64 page_count)
 {
-	dprintf("Inserting %llu free pages starting at PFN %llu\n", page_count, range_start.pfn());
-
 	// Make sure that the amount of pages being inserted is non-zero.
 	assert(page_count > 0);
 
@@ -153,8 +151,6 @@ void page_allocator_buddy::insert_free_block(int order, page &block_start)
  */
 void page_allocator_buddy::remove_free_block(int order, page &block_start)
 {
-	dprintf("Removing free block at PFN %lu, order %d\n", block_start.pfn(), order);
-
 	// Assert that the given order is in the range of orders we support.
 	assert(order >= 0 && order <= LastOrder);
 
@@ -229,8 +225,6 @@ void page_allocator_buddy::split_block(int order, page &block_start)
  */
 void page_allocator_buddy::merge_buddies(int order, page &buddy)
 {
-	dprintf("Merging buddies at order %d, buddy PFN: %lu\n", order, buddy.pfn());
-
 	// Function cannot be called with an invalid order.
 	assert(0 <= order && order <= LastOrder);
 
@@ -321,8 +315,6 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
  */
 void page_allocator_buddy::free_pages(page &block_start, int order)
 {
-	dprintf("Freeing pages starting at PFN %lu, order %d\n", block_start.pfn(), order);
-
 	assert(order >= 0 && order <= LastOrder);
 	assert(block_aligned(order, block_start.pfn()));
 
