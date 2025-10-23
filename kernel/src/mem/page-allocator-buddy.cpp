@@ -260,7 +260,50 @@ void page_allocator_buddy::merge_buddies(int order, page &buddy)
  * @param flags Any allocation flags to take into account.
  * @return page* The starting page of the block that was allocated, or nullptr if the allocation cannot be satisfied.
  */
-page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flags) { panic("TODO"); }
+page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flags)
+{
+	// Ensure that the passed order is valid.
+	assert(order >= 0 && order <= LastOrder);
+
+	// Iterate through the free lists, starting from the requested order
+	for (int current_order = order; current_order <= LastOrder; ++current_order) {
+		// If there is a free block in the current order
+		if (free_list_[current_order] != nullptr) {
+			// Retrieve the first free block
+			page *allocated_page = free_list_[current_order];
+
+			// Remove the block from the free list
+			remove_free_block(current_order, *allocated_page);
+
+			// If the current order is greater than the requested 
+			// order, split the block until it reaches the given 
+			// order.
+			while (current_order > order) {
+				--current_order;
+
+				// Split the block into two smaller blocks
+				split_block(current_order + 1, *allocated_page);
+			}
+
+			// Update metadata for total free pages
+			total_free_ -= pages_per_block(order);
+
+			// Initializes to zero all the allocated pages if the zero flag is set.
+			// Taken from the linear allocator. 
+			if ((flags & page_allocation_flags::zero) == page_allocation_flags::zero) {
+				memops::pzero(allocated_page->base_address_ptr(), pages_per_block(order));
+			}
+
+			// Return the allocated page
+			return allocated_page;
+		}
+	}
+
+	// If no suitable block was found, panic as the 
+	// allocation has failed. 
+	panic("Buddy allocator: Unable to satisfy page allocation request");
+	return nullptr;
+}
 
 /**
  * @brief Frees previously allocated pages, using the buddy algorithm.
@@ -272,10 +315,10 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
 void page_allocator_buddy::free_pages(page &block_start, int order)
 {
 	// Ensure that the passed order is valid.
-	assert(order >= 0 && order <= LastOrder); 
+	assert(order >= 0 && order <= LastOrder);
 
 	// Ensure that the starting page is aligned to the block size.
-	assert(block_aligned(order, block_start.pfn())); 
+	assert(block_aligned(order, block_start.pfn()));
 
 	page *current_block = &block_start;
 
@@ -290,12 +333,12 @@ void page_allocator_buddy::free_pages(page &block_start, int order)
 		}
 
 		// Merge with the buddy since we have already confirmed it is free
-		merge_buddies(order, *current_block);	
+		merge_buddies(order, *current_block);
 
 		// Update the current block to be the merged block
 		order++;
 	}
-	
+
 	// Finally, insert the (possibly merged) block back into the free list
 	insert_free_block(order, *current_block);
 }
@@ -316,7 +359,8 @@ u64 page_allocator_buddy::calculate_other_buddy_pfn(int order, u64 buddy_pfn) { 
  * @param buddy_pfn The PFN of the given buddy block.
  * @return true if the buddy is free, false otherwise.
  */
-bool page_allocator_buddy::is_buddy_free(int order, u64 buddy_pfn){
+bool page_allocator_buddy::is_buddy_free(int order, u64 buddy_pfn)
+{
 	page &buddy = page::get_from_pfn(buddy_pfn);
 	return metadata(&buddy)->next_free != nullptr;
 }
