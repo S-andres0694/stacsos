@@ -304,7 +304,7 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
 			total_free_ -= pages_per_block(order);
 
 			// Initializes to zero all the allocated pages if the zero flag is set.
-			// Taken from the linear allocator.
+			// Taken from the linear allocator code.
 			if ((flags & page_allocation_flags::zero) == page_allocation_flags::zero) {
 				memops::pzero(allocated_page->base_address_ptr(), pages_per_block(order));
 			}
