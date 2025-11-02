@@ -53,6 +53,8 @@ private:
 	// A 2D Array representing the pending merges for each order.
 	// Each bit represents whether a merge is pending for a given block.
 	// If the bit is set, then a merge is pending. If the bit is not set, then no merge is pending.
+	// That means 1 u64 per order, and each u64 provides 64 bits,
+	// so it can track up to 64 pending merges per order (one per bit).
 	u64 pending_merges_[LastOrder + 1][MAX_PENDING_MERGES / 64];
 
 	void insert_free_block(int order, page &block_start);
