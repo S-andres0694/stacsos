@@ -72,29 +72,40 @@ void page_allocator_buddy::dump() const
  */
 void page_allocator_buddy::insert_free_pages(page &range_start, u64 page_count)
 {
+	// Ensure that we have at least one page to insert because otherwise, there's nothing to do.
 	assert(page_count > 0);
 
-	page *cur = &range_start;
+	// Start with the first page in the range.
+	page *current_page = &range_start;
+
+	// Also make sure to keep track of the number of remaining pages to insert,
+	// as well as the number of pages that we have successfully inserted.
 	u64 remaining = page_count;
 	u64 inserted = 0;
 
-	while (remaining) {
-		// largest aligned block that fits
+	// While there are remaining pages to insert I attempt to
+	while (remaining > 0) {
+		// Find the largest possible order that can be inserted
+		// at the current page, given the alignment and remaining pages.
 		int order = LastOrder;
-		while (order > 0 && (!block_aligned(order, cur->pfn()) || pages_per_block(order) > remaining)) {
+		while (order > 0 && (!block_aligned(order, current_page->pfn()) || pages_per_block(order) > remaining)) {
 			--order;
 		}
 
-		// delegate insertion + merging to free_pages
-		free_pages(*cur, order);
+		// free_pages should handle the insertion and coalescing
+		// of the block into the buddy allocator.
+		free_pages(*current_page, order);
 
-		u64 sz = pages_per_block(order);
-		cur = &page::get_from_pfn(cur->pfn() + sz);
-		remaining -= sz;
-		inserted += sz;
+		// Move the current page forward by the size of the block we just inserted.
+		u64 size_of_the_block = pages_per_block(order);
+		current_page = &page::get_from_pfn(current_page->pfn() + size_of_the_block);
+
+		// Make all of the necessary updates to the remaining and inserted counters.
+		remaining -= size_of_the_block;
+		inserted += size_of_the_block;
 	}
 
-	// account for what we actually added
+	// Update the total free pages count.
 	total_free_ += inserted;
 }
 
@@ -268,21 +279,23 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
 
 	for (int current_order = order; current_order <= LastOrder; ++current_order) {
 		if (free_list_[current_order] != nullptr) {
-			// start with the first free block at this order
+			// We find a suitable block at the current order. 
 			page *block_of_pages = free_list_[current_order];
 
-			// split downward first; split_block removes at current_order and
-			// inserts two blocks at current_order-1. Keep the lower buddy.
+			// If the current order is larger than the requested order,
+			// we need to split the block down to the requested order.
 			while (current_order > order) {
 				split_block(current_order, *block_of_pages);
 				--current_order;
 			}
 
-			// now remove exactly once at the target order
+			// We now have a block at the requested order.
 			remove_free_block(order, *block_of_pages);
 
+			// Update the total free pages count.
 			total_free_ -= pages_per_block(order);
 
+			// If the zero flag is set, zero out the allocated pages.
 			if ((flags & page_allocation_flags::zero) == page_allocation_flags::zero) {
 				memops::pzero(block_of_pages->base_address_ptr(), pages_per_block(order));
 			}
