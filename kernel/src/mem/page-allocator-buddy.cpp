@@ -209,7 +209,6 @@ void page_allocator_buddy::split_block(int order, page &block_start)
 	// starts exactly halfway through the block.
 	u64 second_buddy_pfn = block_start.pfn() + (1 << (order - 1));
 
-
 	// Get the starting page references of each buddy block.
 	page &first_buddy = page::get_from_pfn(first_buddy_pfn);
 	page &second_buddy = page::get_from_pfn(second_buddy_pfn);
@@ -279,7 +278,7 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
 
 	for (int current_order = order; current_order <= LastOrder; ++current_order) {
 		if (free_list_[current_order] != nullptr) {
-			// We find a suitable block at the current order. 
+			// We find a suitable block at the current order.
 			page *block_of_pages = free_list_[current_order];
 
 			// If the current order is larger than the requested order,
@@ -304,7 +303,29 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
 		}
 	}
 
-	// If no suitable block was found, print a message as the allocation has failed.
+	// If no suitable block was found, trigger cleanup of pending merges and retry
+	cleanup_pending_merges();
+
+	// Retry the same allocation process after cleanup
+	for (int current_order = order; current_order <= LastOrder; ++current_order) {
+		if (free_list_[current_order] != nullptr) {
+			page *allocated_page = free_list_[current_order];
+			remove_free_block(current_order, *allocated_page);
+			while (current_order > order) {
+				--current_order;
+				split_block(current_order + 1, *allocated_page);
+			}
+
+			total_free_ -= pages_per_block(order);
+
+			if ((flags & page_allocation_flags::zero) == page_allocation_flags::zero) {
+				memops::pzero(allocated_page->base_address_ptr(), pages_per_block(order));
+			}
+			return allocated_page;
+		}
+	}
+
+	// If still no block, print a message as the allocation has failed.
 	dprintf("Buddy allocator: Unable to satisfy page allocation request\n");
 	return nullptr;
 }
@@ -326,23 +347,32 @@ void page_allocator_buddy::free_pages(page &block_start, int order)
 	// Insert the block into the free list first
 	insert_free_block(order, *current_block);
 
-	// Try to coalesce with buddy as long as possible
-	while (order < LastOrder) {
-		page &buddy = page::get_from_pfn(calculate_other_buddy_pfn(order, current_block->pfn()));
+	if (order < LastOrder) {
+		u64 buddy_pfn = calculate_other_buddy_pfn(order, current_block->pfn());
+		page &buddy = page::get_from_pfn(buddy_pfn);
+		if (block_aligned(order, buddy.pfn()) && is_buddy_free(order, buddy.pfn())) {
+			u64 lower_pfn = (block_start.pfn() < buddy_pfn) ? block_start.pfn() : buddy_pfn;
+			if (is_pending_merge(lower_pfn, order)) {
+				// If a merge is already pending for this block, we perform the merge now.
+				clear_pending_merge(lower_pfn, order);
+				merge_buddies(order, *current_block);
 
-		// Check if the buddy is aligned and free to make sure 
-		// that it is possible to merge.
-		if (!block_aligned(order, buddy.pfn()) || !is_buddy_free(order, buddy.pfn())) {
-			break;
+				// After merging, we need to update the current block to the newly merged block.
+				u64 merged_pfn = (block_start.pfn() < buddy_pfn) ? block_start.pfn() : buddy_pfn;
+				current_block = &page::get_from_pfn(merged_pfn);
+
+				// Recursively attempt to merge at the next higher order.
+				free_pages(*current_block, order + 1);
+			} else {
+				// Mark this block as pending merge for future merges.
+				set_pending_merge(lower_pfn, order);
+			}
 		}
-
-		merge_buddies(order, *current_block);
-
-		// After merging, update current_block to the merged block
-		u64 merged_pfn = (current_block->pfn() < buddy.pfn()) ? current_block->pfn() : buddy.pfn();
-		current_block = &page::get_from_pfn(merged_pfn);
-		order++;
 	}
+
+	// Update the total free pages count.
+	total_free_ += pages_per_block(order);
+	return;
 }
 
 /**
@@ -389,7 +419,7 @@ void page_allocator_buddy::set_pending_merge(u64 pfn, int order)
 {
 	size_t index = pending_merge_index(pfn, order);
 
-	// Accesses the appropriate u64 in the pending_merges_ array and set the bit at the calculated index 
+	// Accesses the appropriate u64 in the pending_merges_ array and set the bit at the calculated index
 	// through the creation of a bitmask and a bitwise OR operation.
 	// I chose this specific way of setting the bit to ensure the highest possible performance
 	// purely through bitwise operations.
@@ -430,6 +460,45 @@ void page_allocator_buddy::clear_pending_merge(u64 pfn, int order)
  * @param idx The bit index (from get_pending_index).
  * @return 1 if the bit is set, 0 otherwise.
  */
-int page_allocator_buddy::get_bit(int order, size_t idx) const { 
-	return (pending_merges_[order][idx / 64] & (1ULL << (idx % 64))) ? 1 : 0; 
+int page_allocator_buddy::get_bit(int order, size_t idx) { return (pending_merges_[order][idx / 64] & (1ULL << (idx % 64))) ? 1 : 0; }
+
+/**
+ * @brief Cleans up pending merges by attempting to merge any blocks that are still eligible.
+ * At first, it will check try to retrieve the bit from the pending merges array to see if there is a pending merge.
+ * This function iterates through all orders and checks for pending merges. If both buddies are free and aligned,
+ * it merges them and clears the pending merge mark. If not, it simply clears the pending mark.
+ */
+
+void page_allocator_buddy::cleanup_pending_merges()
+{
+	for (int order = 0; order <= LastOrder; ++order) {
+		for (size_t idx = 0; idx < MAX_PENDING_MERGES; ++idx) {
+			if (get_bit(order, idx)) {
+				// Because of possible modulo collisions, we heuristically approximate the lower PFN.
+				// by assigning it to the index. 
+				u64 possible_lower_pfn = idx;
+				// Verify the hash matches the expected index to avoid collisions.
+				size_t expected_idx = get_pending_index(possible_lower_pfn, order);
+
+				if (expected_idx == idx) {
+					u64 buddy_pfn = calculate_other_buddy_pfn(order, possible_lower_pfn);
+					page &buddy1 = page::get_from_pfn(possible_lower_pfn);
+					page &buddy2 = page::get_from_pfn(buddy_pfn);
+					if (block_aligned(order, buddy1.pfn()) && block_aligned(order, buddy2.pfn()) && is_buddy_free(order, buddy1.pfn())
+						&& is_buddy_free(order, buddy2.pfn())) {
+						merge_buddies(order, buddy1);
+						clear_pending_merge(order, possible_lower_pfn);
+					} else {
+						// Clear invalid pending marks
+						// Might happen because of some changes in the meantime or hash collisions
+						dprintf("Clearing invalid pending merge for PFN %lu at order %d. Might have had collision\n", possible_lower_pfn, order);
+						clear_pending_merge(order, possible_lower_pfn);
+					}
+				} else {
+					// It could not match the hash, so we clear the pending merge mark and move on.
+					clear_pending_merge(order, possible_lower_pfn);
+				}
+			}
+		}
+	}
 }
