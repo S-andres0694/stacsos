@@ -64,9 +64,10 @@ private:
 	void merge_buddies(int order, page &buddy);
 	u64 calculate_other_buddy_pfn(int order, u64 buddy_pfn);
 	bool is_buddy_free(int order, u64 buddy_pfn);
-	size_t pending_merge_index(u64 pfn, int order);
+	size_t pending_merge_index(u64 lower_pfn, int order);
 	void set_pending_merge(u64 pfn, int order);
 	bool is_pending_merge(u64 pfn, int order);
 	void clear_pending_merge(u64 pfn, int order);
+	int get_bit(int order, size_t idx) const;
 };
 } // namespace stacsos::kernel::mem

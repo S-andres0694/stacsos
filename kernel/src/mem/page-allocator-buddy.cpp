@@ -373,3 +373,63 @@ bool page_allocator_buddy::is_buddy_free(int order, u64 buddy_pfn)
 	}
 	return false;
 }
+
+/**
+ * @brief Calculates the index in the pending merges array for a given PFN and order.
+ * This index is calculated using a simple hash function to distribute all of the PFNs across the available slots.
+ *
+ * @param lower_pfn The lower PFN of the buddy pair.
+ * @param order The order of the block.
+ * @return size_t The index in the pending merges array.
+ */
+
+size_t page_allocator_buddy::pending_merge_index(u64 lower_pfn, int order) { return (lower_pfn + order) % MAX_PENDING_MERGES; }
+
+void page_allocator_buddy::set_pending_merge(u64 pfn, int order)
+{
+	size_t index = pending_merge_index(pfn, order);
+
+	// Accesses the appropriate u64 in the pending_merges_ array and set the bit at the calculated index 
+	// through the creation of a bitmask and a bitwise OR operation.
+	// I chose this specific way of setting the bit to ensure the highest possible performance
+	// purely through bitwise operations.
+	pending_merges_[order][index / 64] |= (1ULL << (index % 64));
+}
+
+/**
+ * @brief Clears the pending merge for a given PFN and order.
+ *
+ * @param pfn The PFN of the block.
+ * @param order The order of the block.
+ * @return true if a pending merge was cleared, false otherwise.
+ */
+
+bool page_allocator_buddy::is_pending_merge(u64 pfn, int order)
+{
+	size_t index = pending_merge_index(pfn, order);
+
+	// Accesses the appropriate u64 in the pending_merges_ array and checks if the bit at the calculated index is set
+	// through the creation of a bitmask and a bitwise AND operation.
+	// I chose this specific way of checking the bit to ensure the highest possible performance
+	// purely through bitwise operations.
+	return get_bit(order, index) == 1;
+}
+
+void page_allocator_buddy::clear_pending_merge(u64 pfn, int order)
+{
+	size_t index = pending_merge_index(pfn, order);
+
+	// Mark the element at index as no longer pending in the order-th merge set.
+	pending_merges_[order][index / 64] &= ~(1ULL << (index % 64));
+}
+
+/**
+ * Accesses the appropriate u64 in the pending_merges_ array and checks if the bit at the calculated index is set
+ * Otherwise, if it cannot find the bit, it returns 0.
+ * @param order The order of the block.
+ * @param idx The bit index (from get_pending_index).
+ * @return 1 if the bit is set, 0 otherwise.
+ */
+int page_allocator_buddy::get_bit(int order, size_t idx) const { 
+	return (pending_merges_[order][idx / 64] & (1ULL << (idx % 64))) ? 1 : 0; 
+}
