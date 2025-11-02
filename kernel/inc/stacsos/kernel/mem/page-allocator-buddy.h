@@ -68,6 +68,7 @@ private:
 	void set_pending_merge(u64 pfn, int order);
 	bool is_pending_merge(u64 pfn, int order);
 	void clear_pending_merge(u64 pfn, int order);
-	int get_bit(int order, size_t idx) const;
+	int get_bit(int order, size_t idx) ;
+	void cleanup_pending_merges();
 };
 } // namespace stacsos::kernel::mem
