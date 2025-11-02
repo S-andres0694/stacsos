@@ -72,44 +72,30 @@ void page_allocator_buddy::dump() const
  */
 void page_allocator_buddy::insert_free_pages(page &range_start, u64 page_count)
 {
-	// Make sure that the amount of pages being inserted is non-zero.
 	assert(page_count > 0);
 
-	page *current_page = &range_start;
+	page *cur = &range_start;
+	u64 remaining = page_count;
+	u64 inserted = 0;
 
-	// The idea is to basically dynamically convert each page range into its
-	// corresponding block with the intention of inserting them into the free
-	// list.
-	// To do this, I start from the highest order and work my way down to
-	// the lowest order, attempting to insert the biggest blocks first.
-	// This ensures that fragmentation is kept to a minimum and that we
-	// have the biggest continuous blocks possible.
-	for (int curr_order = LastOrder; curr_order >= 0; curr_order--) {
-		u64 block_size = pages_per_block(curr_order);
-		while (block_aligned(curr_order, current_page->pfn()) && page_count >= block_size) {
-			// By checking if the block starting from the current page is aligned
-			// and that there are enough pages to insert based on the block size
-			// I can insert the block of pages starting from the current page.
-			insert_free_block(curr_order, *current_page);
-
-			// I make sure to attempt a coalescence in the current order
-			// which makes sure that fragmentation is as small as possible and that
-			// we have the biggest amount of large continuous blocks.
-			if (curr_order < LastOrder && is_buddy_free(curr_order, calculate_other_buddy_pfn(curr_order, current_page->pfn()))) {
-				merge_buddies(curr_order, *current_page);
-			}
-
-			// Then, I get the next starting page of the next block by adding the
-			// current block size (the amount of pages we inserted) to the PFN of
-			// the current starting page.
-			current_page = &page::get_from_pfn(current_page->pfn() + block_size);
-			page_count -= block_size;
+	while (remaining) {
+		// largest aligned block that fits
+		int order = LastOrder;
+		while (order > 0 && (!block_aligned(order, cur->pfn()) || pages_per_block(order) > remaining)) {
+			--order;
 		}
+
+		// delegate insertion + merging to free_pages
+		free_pages(*cur, order);
+
+		u64 sz = pages_per_block(order);
+		cur = &page::get_from_pfn(cur->pfn() + sz);
+		remaining -= sz;
+		inserted += sz;
 	}
 
-	// Final update to the metadata, as we added all of the
-	// free pages back to the allocator.
-	total_free_ += page_count;
+	// account for what we actually added
+	total_free_ += inserted;
 }
 
 /**
@@ -280,37 +266,28 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
 	// Ensure that the passed order is valid.
 	assert(order >= 0 && order <= LastOrder);
 
-	// Iterate through the free lists, starting from the requested order
 	for (int current_order = order; current_order <= LastOrder; ++current_order) {
-		// If there is a free block in the current order
 		if (free_list_[current_order] != nullptr) {
-			// Retrieve the first free block
-			page *allocated_page = free_list_[current_order];
+			// start with the first free block at this order
+			page *block_of_pages = free_list_[current_order];
 
-			// Remove the block from the free list
-			remove_free_block(current_order, *allocated_page);
-
-			// If the current order is greater than the requested
-			// order, split the block until it reaches the given
-			// order.
+			// split downward first; split_block removes at current_order and
+			// inserts two blocks at current_order-1. Keep the lower buddy.
 			while (current_order > order) {
+				split_block(current_order, *block_of_pages);
 				--current_order;
-
-				// Split the block into two smaller blocks
-				split_block(current_order + 1, *allocated_page);
 			}
 
-			// Update metadata for total free pages
+			// now remove exactly once at the target order
+			remove_free_block(order, *block_of_pages);
+
 			total_free_ -= pages_per_block(order);
 
-			// Initializes to zero all the allocated pages if the zero flag is set.
-			// Taken from the linear allocator code.
 			if ((flags & page_allocation_flags::zero) == page_allocation_flags::zero) {
-				memops::pzero(allocated_page->base_address_ptr(), pages_per_block(order));
+				memops::pzero(block_of_pages->base_address_ptr(), pages_per_block(order));
 			}
 
-			// Return the allocated page
-			return allocated_page;
+			return block_of_pages;
 		}
 	}
 
