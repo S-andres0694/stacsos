@@ -61,15 +61,15 @@ void page_allocator_buddy::dump() const
 		dprintf("\n");
 	}
 
-	// NEW: Print cache information in a separate section for clarity
+	// Print cache information in a separate section for clarity
 	dprintf("\n*** buddy page allocator - cache ***\n");
 
-	// Loop over each order to display cache contents
+	// Loop over each order to display cache contents based on each one of the orders. 
 	for (int order = 0; order <= LastOrder; order++) {
 		// Print the order number
 		dprintf("[%02u] ", order);
 
-		// If cache has blocks, print them
+		// If cache has any blocks, print them
 		if (cache_count_[order] > 0) {
 			dprintf("COUNT=%d: ", cache_count_[order]);
 			for (int i = 0; i < cache_count_[order]; i++) {
@@ -108,7 +108,7 @@ void page_allocator_buddy::insert_free_pages(page &range_start, u64 page_count)
 	u64 remaining = page_count;
 	u64 inserted = 0;
 
-	// While there are remaining pages to insert I attempt to
+	// While there are remaining pages to insert I attempt to:
 	while (remaining > 0) {
 		// Find the largest possible order that can be inserted
 		// at the current page, given the alignment and remaining pages.
@@ -119,6 +119,11 @@ void page_allocator_buddy::insert_free_pages(page &range_start, u64 page_count)
 
 		// free_pages should handle the insertion and coalescing
 		// of the block into the buddy allocator.
+		// At first, it will try to add the page to the cache instead of directly
+		// returning it to the free list.
+		// If it turns out that the cache is full, it will use the deferred coalescing to 
+		// mark it as a pending merge or merge it immediately if possible
+		// depending on the state of the buddy.
 		free_pages(*current_page, order);
 
 		// Move the current page forward by the size of the block we just inserted.
@@ -312,12 +317,17 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
 	// Ensure that the passed order is valid.
 	assert(order >= 0 && order <= LastOrder);
 
-	// Check for the cache first for exact order match
+	// It will check for the cache at first for the passed order.
+	// If it can find a cached block, it will return it immediately.
+	// Which provides faster allocations for frequently requested orders.
 	if (cache_count_[order] > 0) {
 		cache_count_[order]--;
 		page *cached_block = free_cache_[order][cache_count_[order]];
+
+		// Clear the cache slot after allocation.
 		free_cache_[order][cache_count_[order]] = nullptr;
 
+		// Update the total free pages count.
 		total_free_ -= pages_per_block(order);
 
 		if ((flags & page_allocation_flags::zero) == page_allocation_flags::zero) {
@@ -328,6 +338,9 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
 	}
 
 	// If not in cache, search the free list for a suitable block and proceed as normal.
+	// Loop through each order, starting from the requested order, up to the maximum order.
+	// And then check if there's a free block available.
+	// If there is, we can use it (possibly after splitting it down to the requested order).
 	for (int current_order = order; current_order <= LastOrder; ++current_order) {
 		if (free_list_[current_order] != nullptr) {
 			// We find a suitable block at the current order.
@@ -340,7 +353,7 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
 				--current_order;
 			}
 
-			// We now have a block at the requested order.
+			// Now it has a block at the requested order.
 			remove_free_block(order, *block_of_pages);
 
 			// Update the total free pages count.
@@ -356,10 +369,18 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
 	}
 
 	// If no suitable block was found, trigger cleanup of pending merges and retry
+	// I consider that at this point, the allocator is fragmented enough
+	// that it is worth trying to cleanup pending merges to free up space.
+	// Here, although it takes a performance hit to cleanup, it can free up larger blocks
+	// that can satisfy the allocation request.
 	cleanup_pending_merges();
 
-	// Retry the same allocation process after cleanup
+	// Retry the same allocation process after successfully cleaning up all of the
+	// pending merges.
 	for (int current_order = order; current_order <= LastOrder; ++current_order) {
+		// Loop through each order, starting from the requested order, up to the maximum order.
+		// And then check if there's a free block available.
+		// If there is, we can use it (possibly after splitting it down to the requested order).
 		if (free_list_[current_order] != nullptr) {
 			page *allocated_page = free_list_[current_order];
 			remove_free_block(current_order, *allocated_page);
@@ -378,6 +399,8 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
 	}
 
 	// If still no block, print a message as the allocation has failed.
+	// Was unsure whether to either panic or to just return nullptr.
+	// I assumed the latter based on the self-test behaviour.
 	dprintf("Buddy allocator: Unable to satisfy page allocation request\n");
 	return nullptr;
 }
@@ -393,6 +416,12 @@ void page_allocator_buddy::free_pages(page &block_start, int order)
 {
 	assert(order >= 0 && order <= LastOrder);
 	assert(block_aligned(order, block_start.pfn()));
+
+	// The current functionality of this function is implemented as a three stage series:
+	// 1. Cache Stage: Try to add the block to the cache for faster future allocations. They are immediately available for requests of the same order.
+	// 2. Pending Merge Stage: When the cache fills, blocks overflow into the free list and are marked for pending merge, waiting for their buddy to also be freed before actual coalescing happens, avoiding premature merges.
+	// 3. Immediate Merge Stage: When both buddies are freed, they're immediately merged into larger blocks and inserted into higher-order free lists, or when
+	// memory pressure triggers cleanup_pending_merges(), all pending merges are completed to maximize available contiguous memory.
 
 	page *current_block = &block_start;
 
@@ -510,6 +539,8 @@ bool page_allocator_buddy::is_buddy_free(int order, u64 buddy_pfn)
 	}
 	return false;
 
+
+
 	// If not found in the free list, check the cache as well.
 	// Otherwise the cached blocks would be invisible to the merge system
 	for (int i = 0; i < cache_count_[order]; i++) {
@@ -530,7 +561,13 @@ bool page_allocator_buddy::is_buddy_free(int order, u64 buddy_pfn)
  * @return size_t The index in the pending merges array.
  */
 
-size_t page_allocator_buddy::pending_merge_index(u64 lower_pfn, int order) { return (lower_pfn + order) % MAX_PENDING_MERGES; }
+size_t page_allocator_buddy::pending_merge_index(u64 lower_pfn, int order) {
+	// For simplicity and speed, we use a basic hash function that combines the lower PFN and order.
+	// This might be a limitation as its simplicity can lead to collisions, but it provides a good balance between
+	// performance and space efficiency for the pending merges tracking.
+	// Worth mentioning that during testing, I could not produce a collision with this hash function.
+	return (lower_pfn + order) % MAX_PENDING_MERGES;
+}
 
 void page_allocator_buddy::set_pending_merge(u64 pfn, int order)
 {
@@ -556,9 +593,6 @@ bool page_allocator_buddy::is_pending_merge(u64 pfn, int order)
 	size_t index = pending_merge_index(pfn, order);
 
 	// Accesses the appropriate u64 in the pending_merges_ array and checks if the bit at the calculated index is set
-	// through the creation of a bitmask and a bitwise AND operation.
-	// I chose this specific way of checking the bit to ensure the highest possible performance
-	// purely through bitwise operations.
 	return get_bit(order, index) == 1;
 }
 
@@ -567,6 +601,10 @@ void page_allocator_buddy::clear_pending_merge(u64 pfn, int order)
 	size_t index = pending_merge_index(pfn, order);
 
 	// Mark the element at index as no longer pending in the order-th merge set.
+	// Accesses the appropriate u64 in the pending_merges_ array and clears the bit at the calculated index
+	// through the creation of a bitmask and a bitwise AND operation with negation.
+	// I chose this specific way of clearing the bit to ensure the highest possible performance
+	// purely through bitwise operations.
 	pending_merges_[order][index / 64] &= ~(1ULL << (index % 64));
 }
 
@@ -577,7 +615,9 @@ void page_allocator_buddy::clear_pending_merge(u64 pfn, int order)
  * @param idx The bit index (from pending_merge_index).
  * @return 1 if the bit is set, 0 otherwise.
  */
-int page_allocator_buddy::get_bit(int order, size_t idx) { return (pending_merges_[order][idx / 64] & (1ULL << (idx % 64))) ? 1 : 0; }
+int page_allocator_buddy::get_bit(int order, size_t idx) {
+	return (pending_merges_[order][idx / 64] & (1ULL << (idx % 64))) ? 1 : 0;
+}
 
 /**
  * @brief Cleans up pending merges by attempting to merge any blocks that are still eligible.
@@ -592,6 +632,12 @@ void page_allocator_buddy::cleanup_pending_merges()
 		dprintf("Cleaning up pending merges in buddy allocator\n");
 	}
 	for (int order = 0; order <= LastOrder; ++order) {
+
+		// Iterate through all possible indices in the pending merges array for the current order.
+		// This is done with the intention of checking all possible pending merges.
+		// If a pending merge is found, it will attempt to merge the buddies.
+		// If the buddies cannot be merged (due to one or both not being free/aligned),
+		// it will simply clear the pending merge mark.
 		for (size_t idx = 0; idx < MAX_PENDING_MERGES; ++idx) {
 			if (get_bit(order, idx)) {
 				// Because of possible modulo collisions, we heuristically approximate the lower PFN.
@@ -601,11 +647,15 @@ void page_allocator_buddy::cleanup_pending_merges()
 				size_t expected_idx = pending_merge_index(possible_lower_pfn, order);
 
 				if (expected_idx == idx) {
+					// Get all necessary values to check for the merging possibility. 
 					u64 buddy_pfn = calculate_other_buddy_pfn(order, possible_lower_pfn);
 					page &buddy1 = page::get_from_pfn(possible_lower_pfn);
 					page &buddy2 = page::get_from_pfn(buddy_pfn);
+
+					// Both buddies must be free and aligned to proceed with the merge.
 					if (block_aligned(order, buddy1.pfn()) && block_aligned(order, buddy2.pfn()) && is_buddy_free(order, buddy1.pfn())
 						&& is_buddy_free(order, buddy2.pfn())) {
+						// Perform the merge and clear the pending merge mark.
 						merge_buddies(order, buddy1);
 						clear_pending_merge(order, possible_lower_pfn);
 					} else {
@@ -638,6 +688,7 @@ int page_allocator_buddy::find_in_cache(int order, u64 pfn)
 		dprintf("Searching for block in cache: order=%d, pfn=%lu\n", order, pfn);
 	}
 	
+	// Iterate through the cache for the given order to find the block with the specified PFN.
 	for (int i = 0; i < cache_count_[order]; ++i) {
 		if (free_cache_[order][i] && free_cache_[order][i]->pfn() == pfn) {
 			return i;
