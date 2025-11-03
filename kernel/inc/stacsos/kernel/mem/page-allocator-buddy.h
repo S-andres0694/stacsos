@@ -20,6 +20,18 @@ public:
 			free_list_[i] = nullptr;
 		}
 
+		// Initialize free list and cache
+		// with null values and zero counts.
+		for (int i = 0; i <= LastOrder; i++) {
+			free_list_[i] = nullptr;
+
+			// NEW: Initialize cache
+			cache_count_[i] = 0;
+			for (int j = 0; j < CacheSize; j++) {
+				free_cache_[i][j] = nullptr;
+			}
+		}
+
 		// Initialize all pending merges to zero.
 		// In the constructor or init method
 		for (int i = 0; i <= LastOrder; ++i) {
@@ -42,6 +54,11 @@ private:
 
 	page *free_list_[LastOrder + 1];
 	u64 total_free_;
+
+	// Simple cache to hold recently freed blocks for quick re-allocation.
+	static const int CacheSize = 4;
+	page *free_cache_[LastOrder + 1][CacheSize]; // 2D array: [order][cache_slot]
+	int cache_count_[LastOrder + 1]; // Track how many blocks in each cache
 
 	constexpr u64 pages_per_block(int order) const { return 1 << order; }
 
@@ -71,5 +88,7 @@ private:
 	void clear_pending_merge(u64 pfn, int order);
 	int get_bit(int order, size_t idx) ;
 	void cleanup_pending_merges();
+	int find_in_cache(int order, u64 pfn);
+	void remove_from_cache(int order, int index);
 };
 } // namespace stacsos::kernel::mem

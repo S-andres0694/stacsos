@@ -60,6 +60,27 @@ void page_allocator_buddy::dump() const
 		// New line for the next order.
 		dprintf("\n");
 	}
+
+	// NEW: Print cache information in a separate section for clarity
+	dprintf("\n*** buddy page allocator - cache ***\n");
+
+	// Loop over each order to display cache contents
+	for (int order = 0; order <= LastOrder; order++) {
+		// Print the order number
+		dprintf("[%02u] ", order);
+
+		// If cache has blocks, print them
+		if (cache_count_[order] > 0) {
+			dprintf("COUNT=%d: ", cache_count_[order]);
+			for (int i = 0; i < cache_count_[order]; i++) {
+				dprintf("%lx--%lx ", free_cache_[order][i]->base_address(), (free_cache_[order][i]->base_address() + ((1 << order) << PAGE_BITS)) - 1);
+			}
+		} else {
+			dprintf("(empty)");
+		}
+
+		dprintf("\n");
+	}
 }
 
 /**
@@ -291,6 +312,22 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
 	// Ensure that the passed order is valid.
 	assert(order >= 0 && order <= LastOrder);
 
+	// Check for the cache first for exact order match
+	if (cache_count_[order] > 0) {
+		cache_count_[order]--;
+		page *cached_block = free_cache_[order][cache_count_[order]];
+		free_cache_[order][cache_count_[order]] = nullptr;
+
+		total_free_ -= pages_per_block(order);
+
+		if ((flags & page_allocation_flags::zero) == page_allocation_flags::zero) {
+			memops::pzero(cached_block->base_address_ptr(), pages_per_block(order));
+		}
+
+		return cached_block;
+	}
+
+	// If not in cache, search the free list for a suitable block and proceed as normal.
 	for (int current_order = order; current_order <= LastOrder; ++current_order) {
 		if (free_list_[current_order] != nullptr) {
 			// We find a suitable block at the current order.
@@ -354,50 +391,95 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
  */
 void page_allocator_buddy::free_pages(page &block_start, int order)
 {
-	if (DEBUG_MODE) {
-		dprintf("Buddy allocator: Freeing block at PFN %lu of order %d\n", block_start.pfn(), order);
-	}
-
 	assert(order >= 0 && order <= LastOrder);
 	assert(block_aligned(order, block_start.pfn()));
 
 	page *current_block = &block_start;
 
-	// Insert the block into the free list first
+	// Try to add to cache first, which will provide faster future allocations.
+	// Compared to the deferred coalescing, this should provide better performance at first. 
+	if (cache_count_[order] < CacheSize) {
+		free_cache_[order][cache_count_[order]++] = current_block;
+		total_free_ += pages_per_block(order);
+		return; 
+	}
+
+	// If the cache is full, check if buddy is cached
+	if (order < LastOrder) {
+		u64 buddy_pfn = calculate_other_buddy_pfn(order, current_block->pfn());
+
+		// Obtain the index of the buddy in the cache, if it exists
+		int buddy_cache_idx = find_in_cache(order, buddy_pfn);
+
+		if (buddy_cache_idx != -1) {
+			// Find the Buddy in the cache, therefore evict it so it can merge both blocks.
+			page *cached_buddy = free_cache_[order][buddy_cache_idx];
+			remove_from_cache(order, buddy_cache_idx);
+
+			// Then, you insert the current block back into the free list
+			insert_free_block(order, *current_block);
+
+			// Come back to the deferred merging logic to merge both blocks.
+			page &buddy = page::get_from_pfn(buddy_pfn);
+			if (block_aligned(order, buddy.pfn()) && is_buddy_free(order, buddy.pfn())) {
+				u64 lower_pfn = (block_start.pfn() < buddy_pfn) ? block_start.pfn() : buddy_pfn;
+
+				// Check if a merge is already pending for this buddy pair
+				// and if it is we perform the merge immediately
+				// to avoid any possible fragmentation.
+				if (is_pending_merge(lower_pfn, order)) {
+					clear_pending_merge(lower_pfn, order);
+					merge_buddies(order, *current_block);
+
+					u64 merged_pfn = (block_start.pfn() < buddy_pfn) ? block_start.pfn() : buddy_pfn;
+					current_block = &page::get_from_pfn(merged_pfn);
+
+					// Recursively merge at higher order
+					free_pages(*current_block, order + 1);
+					return; 
+				} else {
+					// Mark this buddy pair as pending merge for future coalescing as there's
+					// no pending merge found.
+					set_pending_merge(lower_pfn, order);
+				}
+			}
+
+			// Finally, since we evicted a block from the cache, we don't double count it.
+			total_free_ += pages_per_block(order);
+			return;
+		}
+	}
+
+	// Cache full, buddy not cached - use your deferred coalescing
 	insert_free_block(order, *current_block);
 
 	if (order < LastOrder) {
 		u64 buddy_pfn = calculate_other_buddy_pfn(order, current_block->pfn());
 		page &buddy = page::get_from_pfn(buddy_pfn);
+		// Check if a merge is already pending for this buddy pair
+		// and if it is we perform the merge immediately
+		// to avoid any possible fragmentation.
 		if (block_aligned(order, buddy.pfn()) && is_buddy_free(order, buddy.pfn())) {
 			u64 lower_pfn = (block_start.pfn() < buddy_pfn) ? block_start.pfn() : buddy_pfn;
 			if (is_pending_merge(lower_pfn, order)) {
-				if (DEBUG_MODE) {
-					dprintf("Merging block at PFN %lu of order %d with its buddy at PFN %lu as the merge was pending\n", current_block->pfn(), order, buddy_pfn);
-				}
-				// If a merge is already pending for this block, we perform the merge now.
 				clear_pending_merge(lower_pfn, order);
 				merge_buddies(order, *current_block);
 
-				// After merging, we need to update the current block to the newly merged block.
 				u64 merged_pfn = (block_start.pfn() < buddy_pfn) ? block_start.pfn() : buddy_pfn;
 				current_block = &page::get_from_pfn(merged_pfn);
 
-				// Recursively attempt to merge at the next higher order.
+				// Recursively merge at higher order
 				free_pages(*current_block, order + 1);
+				return; 
 			} else {
-				// Mark this block as pending merge for future merges.
-				if (DEBUG_MODE) {
-					dprintf("Marking block at PFN %lu of order %d as pending merge\n", lower_pfn, order);
-				}
+				// Mark this buddy pair as pending merge for future coalescing as there's
+				// no pending merge found.
 				set_pending_merge(lower_pfn, order);
 			}
 		}
 	}
 
-	// Update the total free pages count.
 	total_free_ += pages_per_block(order);
-	return;
 }
 
 /**
@@ -426,6 +508,16 @@ bool page_allocator_buddy::is_buddy_free(int order, u64 buddy_pfn)
 			return true;
 		current = metadata(current)->next_free;
 	}
+	return false;
+
+	// If not found in the free list, check the cache as well.
+	// Otherwise the cached blocks would be invisible to the merge system
+	for (int i = 0; i < cache_count_[order]; i++) {
+		if (free_cache_[order][i]->pfn() == buddy_pfn) {
+			return true;
+		}
+	}
+
 	return false;
 }
 
@@ -529,4 +621,52 @@ void page_allocator_buddy::cleanup_pending_merges()
 			}
 		}
 	}
+}
+
+/**
+ * @brief Finds a block in the free cache for a given order and PFN.
+ *
+ * @param order The order of the block.
+ * @param pfn The PFN of the block.
+ * @return The index of the block in the cache, or -1 if not found.
+ */
+
+int page_allocator_buddy::find_in_cache(int order, u64 pfn)
+{
+	if (DEBUG_MODE)
+	{
+		dprintf("Searching for block in cache: order=%d, pfn=%lu\n", order, pfn);
+	}
+	
+	for (int i = 0; i < cache_count_[order]; ++i) {
+		if (free_cache_[order][i] && free_cache_[order][i]->pfn() == pfn) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+/**
+ * @brief Removes a block from the free cache for a given order and index.
+ * Will also maintain the LIFO order of the cache by shifting all elements down.
+ * @param order The order of the block.
+ * @param index The index of the block in the cache.
+ */
+
+void page_allocator_buddy::remove_from_cache(int order, int index)
+{
+	if (DEBUG_MODE) {
+		dprintf("Removing block from cache: order=%d, index=%d\n", order, index);
+	}
+
+	assert(index >= 0 && index < cache_count_[order]);
+	// Shift all subsequent entries down to fill the gap and
+	// maintain the LIFO order.
+	for (int i = index; i < cache_count_[order] - 1; ++i) {
+		free_cache_[order][i] = free_cache_[order][i + 1];
+	}
+
+	// Clear the last entry and decrement the count.
+	free_cache_[order][cache_count_[order] - 1] = nullptr;
+	--cache_count_[order];
 }
