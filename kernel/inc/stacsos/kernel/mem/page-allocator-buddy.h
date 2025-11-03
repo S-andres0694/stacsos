@@ -53,7 +53,7 @@ private:
 	// Used during the development stages for the 
 	// additional logging of the
 	// functions within the allocator.
-	const bool DEBUG_MODE = true;
+	const bool DEBUG_MODE = false;
 	static const int LastOrder = 16;
 
 	page *free_list_[LastOrder + 1];
