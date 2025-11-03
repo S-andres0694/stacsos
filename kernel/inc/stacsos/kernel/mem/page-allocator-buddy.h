@@ -49,14 +49,24 @@ public:
 	virtual void dump() const override;
 
 private:
+	// Enable debug mode for additional logging
+	// Used during the development stages for the 
+	// additional logging of the
+	// functions within the allocator.
 	const bool DEBUG_MODE = true;
 	static const int LastOrder = 16;
 
 	page *free_list_[LastOrder + 1];
 	u64 total_free_;
 
-	// Simple cache to hold recently freed blocks for quick re-allocation.
+	// Cache size per order for freed blocks.
+	// Chose the number 4 as a balance between memory usage and hit rate through
+	// experimentation.
 	static const int CacheSize = 4;
+
+	// Simple cache to hold recently freed blocks for quick re-allocation.
+	// Because we are not allowed to use any dynamic memory allocation,
+	// we use a fixed-size cache per order.
 	page *free_cache_[LastOrder + 1][CacheSize]; // 2D array: [order][cache_slot]
 	int cache_count_[LastOrder + 1]; // Track how many blocks in each cache
 
