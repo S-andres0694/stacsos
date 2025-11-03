@@ -31,6 +31,9 @@ static inline page_metadata *metadata(page *page) { return (page_metadata *)page
 
 /**
  * @brief Dumps out (via the debugging routines) the current state of the buddy page allocator's free lists
+ * As a disclaimer, my code does not match the expected example output in the self-test mechanism given to us. 
+ * This can be explained by the usage of the cache as well as the deferred merging mechanism, which alters
+ * the order and manner in which blocks are stored and merged in the free lists.
  */
 void page_allocator_buddy::dump() const
 {
