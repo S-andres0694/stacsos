@@ -72,6 +72,10 @@ void page_allocator_buddy::dump() const
  */
 void page_allocator_buddy::insert_free_pages(page &range_start, u64 page_count)
 {
+	if (DEBUG_MODE) {
+		dprintf("Buddy allocator: Inserting %lu free pages starting at PFN %lu\n", page_count, range_start.pfn());
+	}
+
 	// Ensure that we have at least one page to insert because otherwise, there's nothing to do.
 	assert(page_count > 0);
 
@@ -117,6 +121,10 @@ void page_allocator_buddy::insert_free_pages(page &range_start, u64 page_count)
  */
 void page_allocator_buddy::insert_free_block(int order, page &block_start)
 {
+	if (DEBUG_MODE) {
+		dprintf("Buddy allocator: Inserting free block at PFN %lu of order %d\n", block_start.pfn(), order);
+	}
+
 	// Assert that the given order is in the range of orders we support.
 	assert(order >= 0 && order <= LastOrder);
 
@@ -152,6 +160,9 @@ void page_allocator_buddy::insert_free_block(int order, page &block_start)
  */
 void page_allocator_buddy::remove_free_block(int order, page &block_start)
 {
+	if (DEBUG_MODE) {
+		dprintf("Removing free block: order=%d, pfn=%lu\n", order, block_start.pfn());
+	}
 	// Assert that the given order is in the range of orders we support.
 	assert(order >= 0 && order <= LastOrder);
 
@@ -188,6 +199,10 @@ void page_allocator_buddy::remove_free_block(int order, page &block_start)
  */
 void page_allocator_buddy::split_block(int order, page &block_start)
 {
+	if (DEBUG_MODE) {
+		dprintf("Buddy allocator: Splitting block at PFN %lu of order %d\n", block_start.pfn(), order);
+	}
+
 	// Function cannot be called with an invalid order.
 	assert(0 < order && order <= LastOrder);
 
@@ -339,6 +354,10 @@ page *page_allocator_buddy::allocate_pages(int order, page_allocation_flags flag
  */
 void page_allocator_buddy::free_pages(page &block_start, int order)
 {
+	if (DEBUG_MODE) {
+		dprintf("Buddy allocator: Freeing block at PFN %lu of order %d\n", block_start.pfn(), order);
+	}
+
 	assert(order >= 0 && order <= LastOrder);
 	assert(block_aligned(order, block_start.pfn()));
 
@@ -353,6 +372,9 @@ void page_allocator_buddy::free_pages(page &block_start, int order)
 		if (block_aligned(order, buddy.pfn()) && is_buddy_free(order, buddy.pfn())) {
 			u64 lower_pfn = (block_start.pfn() < buddy_pfn) ? block_start.pfn() : buddy_pfn;
 			if (is_pending_merge(lower_pfn, order)) {
+				if (DEBUG_MODE) {
+					dprintf("Merging block at PFN %lu of order %d with its buddy at PFN %lu as the merge was pending\n", current_block->pfn(), order, buddy_pfn);
+				}
 				// If a merge is already pending for this block, we perform the merge now.
 				clear_pending_merge(lower_pfn, order);
 				merge_buddies(order, *current_block);
@@ -365,6 +387,9 @@ void page_allocator_buddy::free_pages(page &block_start, int order)
 				free_pages(*current_block, order + 1);
 			} else {
 				// Mark this block as pending merge for future merges.
+				if (DEBUG_MODE) {
+					dprintf("Marking block at PFN %lu of order %d as pending merge\n", lower_pfn, order);
+				}
 				set_pending_merge(lower_pfn, order);
 			}
 		}
@@ -457,7 +482,7 @@ void page_allocator_buddy::clear_pending_merge(u64 pfn, int order)
  * Accesses the appropriate u64 in the pending_merges_ array and checks if the bit at the calculated index is set
  * Otherwise, if it cannot find the bit, it returns 0.
  * @param order The order of the block.
- * @param idx The bit index (from get_pending_index).
+ * @param idx The bit index (from pending_merge_index).
  * @return 1 if the bit is set, 0 otherwise.
  */
 int page_allocator_buddy::get_bit(int order, size_t idx) { return (pending_merges_[order][idx / 64] & (1ULL << (idx % 64))) ? 1 : 0; }
@@ -471,6 +496,9 @@ int page_allocator_buddy::get_bit(int order, size_t idx) { return (pending_merge
 
 void page_allocator_buddy::cleanup_pending_merges()
 {
+	if (DEBUG_MODE) {
+		dprintf("Cleaning up pending merges in buddy allocator\n");
+	}
 	for (int order = 0; order <= LastOrder; ++order) {
 		for (size_t idx = 0; idx < MAX_PENDING_MERGES; ++idx) {
 			if (get_bit(order, idx)) {
@@ -478,7 +506,7 @@ void page_allocator_buddy::cleanup_pending_merges()
 				// by assigning it to the index. 
 				u64 possible_lower_pfn = idx;
 				// Verify the hash matches the expected index to avoid collisions.
-				size_t expected_idx = get_pending_index(possible_lower_pfn, order);
+				size_t expected_idx = pending_merge_index(possible_lower_pfn, order);
 
 				if (expected_idx == idx) {
 					u64 buddy_pfn = calculate_other_buddy_pfn(order, possible_lower_pfn);

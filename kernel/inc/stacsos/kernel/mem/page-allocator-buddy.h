@@ -37,6 +37,7 @@ public:
 	virtual void dump() const override;
 
 private:
+	const bool DEBUG_MODE = true;
 	static const int LastOrder = 16;
 
 	page *free_list_[LastOrder + 1];
