@@ -1,6 +1,7 @@
 #include <stacsos/console.h>
 #include <stacsos/memops.h>
 #include <stacsos/user-syscall.h>
+#include <stacsos/ls.h>
 
 using namespace stacsos;
 
@@ -143,6 +144,8 @@ int main(const char *cmdline)
 		return 1;
 	}
 
-    // TODO: Here's the place to actually perform the syscall and get the results.
+    // Perform the 'ls' syscall
+    ls_result *result = ls::ls_syscall_wrapper((char *)cmdline, flags);
+	print_ls_result(*result, flags);
 	return 0;
 }

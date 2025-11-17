@@ -21,6 +21,8 @@ enum class fs_node_kind { file, directory };
 // If the syscall itself was successful, but the operation failed for some reason,
 // I use these codes to indicate the specific failure reason so the console can handle it appropriately.
 enum class ls_result_code { ok = 0, directory_does_not_exist = 1, file_was_passed = 2, unknown_error = 3 };
+
+// Flags for the 'ls' syscall
 typedef struct ls_flags {
 	// Long listing flag - if set, 'ls' should provide detailed information about each entry. Detailed by /usr/ls -l
 	bool long_listing_flag;
@@ -30,7 +32,7 @@ typedef struct ls_flags {
 // 'ls' syscall request structure - used to pass parameters from user space to kernel space
 typedef struct ls_syscall_request {
 	// The path to list
-	char path[MAX_PATHNAME_LENGTH];
+	char *path;
 
 	// Flags for the ls command
 	ls_flags flags;
@@ -143,6 +145,18 @@ public:
 	static syscall_result sleep(u64 ms) { return syscall1(syscall_numbers::sleep, ms); }
 
 	static void poweroff() { syscall0(syscall_numbers::poweroff); }
+
+	/**
+	 * Performs the 'ls' syscall to list the contents of a directory.
+	 * Fills in the provided result buffer with the results of the syscall.
+	 * @param request The ls_syscall_request structure containing the flags and path for the syscall.
+	 * @param result_buffer The ls_result structure to be filled with the results of the syscall
+	 */
+	static void ls_syscall(const ls_syscall_request &request, ls_result &result_buffer)
+	{
+		// This syscall does not return a value, instead it fills in the result buffer provided.
+		syscall2(syscall_numbers::ls_syscall, (u64)&request, (u64)&result_buffer);
+	}
 
 private:
 	static syscall_result syscall0(syscall_numbers id)

@@ -182,6 +182,10 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 		return syscall_result { syscall_result_code::ok, 0 };
 	}
 
+	case syscall_numbers::ls_syscall: {
+		// TODO: implement the actual code for the syscall now.
+	}
+
 	default:
 		dprintf("ERROR: unsupported syscall: %lx\n", index);
 		return syscall_result { syscall_result_code::not_supported, 0 };
