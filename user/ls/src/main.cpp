@@ -1,7 +1,7 @@
 #include <stacsos/console.h>
 #include <stacsos/memops.h>
-#include <stacsos/user-syscall.h>
 #include <stacsos/ls.h>
+#include <stacsos/syscalls.h>
 
 using namespace stacsos;
 
@@ -31,7 +31,7 @@ int get_max_name_length(const ls_result &result)
  * @param result The ls_result structure containing the results of the syscall.
  * @param flags The ls_flags structure indicating how to format the output.
  */
-void print_ls_result(const ls_result &result, const ls_flags &flags)
+void print_ls_result(const ls_result &result, u8 flags)
 {
 	// This code is probably unreachable because I can guarantee that the syscall will always exist.
 	if (result.code != syscall_result_code::ok) {
@@ -60,7 +60,7 @@ void print_ls_result(const ls_result &result, const ls_flags &flags)
 	for (u64 i = 0; i < result.number_entries; i++) {
 		const directory_entry &entry = result.entries[i];
 		// Long listing format based on the specification sheet.
-		if (flags.long_listing_flag) {
+		if (flags & LS_FLAG_LONG_LISTING) {
 			// Determine the maximum name length for formatting
             // Also set up column widths accordingly.
             int max_name_length = get_max_name_length(result);
@@ -110,14 +110,14 @@ int main(const char *cmdline)
 
 	// Check if the flags are set.
 	// Took this from a similar piece of code in user/cat/src/main.cpp
-	ls_flags flags = {};
+	u8 flags = 0;
 	while (*cmdline) {
 		if (*cmdline == '-') {
 			cmdline++;
 
 			// Will add checks for more flags here if necessary.
 			if (*cmdline++ == 'l') {
-				flags.long_listing_flag = true;
+				flags |= LS_FLAG_LONG_LISTING;
 			} else {
 				console::get().write("error: usage: ls [-l] <path>\n");
 				return 1;
@@ -145,7 +145,7 @@ int main(const char *cmdline)
 	}
 
     // Perform the 'ls' syscall
-    ls_result *result = ls::ls_syscall_wrapper((char *)cmdline, flags);
+    ls_result *result = (ls_result *)ls::ls_syscall_wrapper((char *)cmdline, flags);
 	print_ls_result(*result, flags);
 	return 0;
 }
