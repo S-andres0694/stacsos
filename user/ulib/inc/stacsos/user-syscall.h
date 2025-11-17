@@ -8,8 +8,65 @@
 #pragma once
 
 #include <stacsos/syscalls.h>
+#define MAX_PATHNAME_LENGTH 256
+#define MAX_RESULT_ENTRIES 256
 
 namespace stacsos {
+
+// File system node kinds - copied from the kernel fs-node.h for consistency.
+// I am probably able to include the kernel header here instead, but this is simpler for now.	
+enum class fs_node_kind { file, directory };
+
+// Result codes for the 'ls' syscall
+// If the syscall itself was successful, but the operation failed for some reason,
+// I use these codes to indicate the specific failure reason so the console can handle it appropriately.
+enum class ls_result_code { ok = 0, directory_does_not_exist = 1, file_was_passed = 2, unknown_error = 3 };
+typedef struct ls_flags {
+	// Long listing flag - if set, 'ls' should provide detailed information about each entry. Detailed by /usr/ls -l
+	bool long_listing_flag;
+} ls_flags;
+
+
+// 'ls' syscall request structure - used to pass parameters from user space to kernel space
+typedef struct ls_syscall_request {
+	// The path to list
+	char path[MAX_PATHNAME_LENGTH];
+
+	// Flags for the ls command
+	ls_flags flags;
+} ls_syscall_request;
+
+// Directory entry structure - shared between kernel and user space
+typedef struct directory_entry {
+	// The name of the file/directory that is being represented
+	char name[MAX_PATHNAME_LENGTH];
+
+	// The type of this entry (file/directory).
+	fs_node_kind type;
+
+	// The size of this entry (in bytes).
+	u64 size;
+} directory_entry;
+
+// Result structure for the 'ls' syscall. This is going to be used by the
+// user space application to interpret the results of the syscall.
+typedef struct ls_result {
+	// The result code of the syscall
+	syscall_result_code code;
+
+	// The result code of the syscall
+	// To allow for a more detailed result within the ls operation itself.
+	// I wanted to have a separate result code here.
+	ls_result_code result_code;
+
+	// The number of entries returned
+	u64 number_entries;
+
+	// The list of entries returned following the custom type definition.
+	// Hard limit of 256 entries for simplicity and might be changed.
+	directory_entry entries[MAX_RESULT_ENTRIES];
+} ls_result;
+
 struct rw_result {
 	syscall_result_code code;
 	u64 length;
