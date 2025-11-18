@@ -10,6 +10,7 @@
 #include <stacsos/kernel/debug.h>
 #include <stacsos/kernel/fs/vfs.h>
 #include <stacsos/kernel/mem/address-space.h>
+#include <stacsos/kernel/mem/copy-to-user.h>
 #include <stacsos/kernel/obj/object-manager.h>
 #include <stacsos/kernel/obj/object.h>
 #include <stacsos/kernel/sched/process-manager.h>
@@ -186,11 +187,12 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 		// Cast the user space pointers
 		const char *path_ptr = (const char *)arg0;
 		u8 flags = (u8)arg1;
+		ls_result *result_buffer = (ls_result *)arg2;
 
+		ls_result kernel_result;
 
 		dprintf("Handling 'ls' syscall for path and flags: %s, %u\n", path_ptr, flags);
 
-		// Computation should happen here.	
 		return syscall_result { syscall_result_code::ok, 0 };
 	}
 
