@@ -197,7 +197,7 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 		// files mounted under the root are part of a FAT filesystem.
 		// So we can just use the VFS to look up the path.
 		// And we know it will be FAT specific nodes.
-		fs_node *node = vfs::get().lookup(path_ptr);
+		auto *node = vfs::get().lookup(path_ptr);
 		if (node == nullptr) {
 			// kernel_result.code = syscall_result_code::ok;
 			// kernel_result.result_code = ls_result_code::directory_does_not_exist;
@@ -221,7 +221,16 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 		}
 
 		// It's a directory, perform the listing
-		dprintf("Handling 'ls' syscall for path and flags: %s, %u\n", path_ptr, flags);
+		list<fs_node *> &children = node->children();
+		if (children.count() == 0){
+			// kernel_result.code = syscall_result_code::ok;
+			// kernel_result.result_code = ls_result_code::directory_empty;
+			// kernel_result.number_entries = 0;
+			// // Copy back the result
+			// copy_to_user(result_buffer, &kernel_result, sizeof(ls_result));
+			dprintf("Directory is empty: %s\n", path_ptr);
+			return syscall_result { syscall_result_code::ok, 0 };
+		}
 
 		return syscall_result { syscall_result_code::ok, 0 };
 	}
