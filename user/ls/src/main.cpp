@@ -27,11 +27,12 @@ int get_max_name_length(const ls_result &result)
 
 /**
  * Function to print the results of the 'ls' syscall based on the provided flags.
- * 
+ *
  * @param result The ls_result structure containing the results of the syscall.
  * @param flags The ls_flags structure indicating how to format the output.
  */
-void print_ls_result(const ls_result &result, u8 flags)
+
+void ls::print_ls_result(const ls_result &result, u8 flags)
 {
 	// This code is probably unreachable because I can guarantee that the syscall will always exist.
 	if (result.code != syscall_result_code::ok) {
@@ -62,37 +63,37 @@ void print_ls_result(const ls_result &result, u8 flags)
 		// Long listing format based on the specification sheet.
 		if (flags & LS_FLAG_LONG_LISTING) {
 			// Determine the maximum name length for formatting
-            // Also set up column widths accordingly.
-            int max_name_length = get_max_name_length(result);
+			// Also set up column widths accordingly.
+			int max_name_length = get_max_name_length(result);
 
 			// Minimum spaces between columns. Just hardcoded it and chose
-            // because it looks reasonable.
-			int minimum_padding = 6; 
+			// because it looks reasonable.
+			int minimum_padding = 6;
 
-            // The width should be the maximum name length plus some padding.
+			// The width should be the maximum name length plus some padding.
 			int NAME_COLUMN_WIDTH = max_name_length + minimum_padding;
 
 			char type_char = (entry.type == fs_node_kind::directory) ? 'D' : 'F';
-			
-            console::get().writef("[%c] %s", type_char, entry.name);
 
-            // Calculate padding dynamically based on the name length.
+			console::get().writef("[%c] %s", type_char, entry.name);
+
+			// Calculate padding dynamically based on the name length.
 			int name_len = memops::strlen(entry.name);
 			int padding = NAME_COLUMN_WIDTH - name_len;
-		
-            // Make sure there's at least one space of padding, regardless of the 
-            // name length.
-            if (padding < 1){
+
+			// Make sure there's at least one space of padding, regardless of the
+			// name length.
+			if (padding < 1) {
 				padding = 1;
 			}
 
-            // Add the padding dynamically.
+			// Add the padding dynamically.
 			for (int j = 0; j < padding; j++) {
 				console::get().write(" ");
 			}
 
-            // Prints the file size in bytes.
-			console::get().writef("%llu\n", entry.size); 
+			// Prints the file size in bytes.
+			console::get().writef("%llu\n", entry.size);
 		} else {
 			// Simple listing format
 			console::get().writef("%s\n", entry.name);
@@ -145,7 +146,8 @@ int main(const char *cmdline)
 	}
 
     // Perform the 'ls' syscall
-    ls_result *result = (ls_result *)ls::ls_syscall_wrapper((char *)cmdline, flags);
-	print_ls_result(*result, flags);
+	console::get().writef("Performing 'ls' syscall on path: %s with flags: %u\n", cmdline, flags);
+    ls::ls_syscall_wrapper(cmdline);
+	console::get().writef("'ls' syscall completed. Processing results...\n");
 	return 0;
 }

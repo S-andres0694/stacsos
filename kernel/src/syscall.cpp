@@ -184,13 +184,11 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 
 	case syscall_numbers::ls_syscall: {
 		// Cast the user space pointers
-		auto path_ptr = (char *)arg0;
-		auto flags = (u8)arg1;
-		ls_result *result_ptr;
+		const char *path_ptr = (const char *)arg0;
+		dprintf("Handling 'ls' syscall for path: %s\n", path_ptr);
 
 		// Computation should happen here.	
-
-		return syscall_result { syscall_result_code::ok, (u64)result_ptr };
+		return syscall_result { syscall_result_code::ok, 0 };
 	}
 
 	default:

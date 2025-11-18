@@ -1,18 +1,15 @@
 #pragma once
 #include <stacsos/user-syscall.h>
+
 namespace stacsos {
+/**
+ * Class which wraps over the native 'ls' syscall and provides utility functions
+ * to print the results.
+ */
 class ls {
-public:
-    /**
-     * Performs the 'ls' syscall to list the contents of a directory.
-     * Acts as the bridge between user space and kernel space for the 'ls' operation.
-     * @param path The path of the directory to list.
-     * @param flags The flags to modify the behavior of the 'ls' command.
-     * @return An ls_result structure containing the results of the 'ls' operation.
-     */
-	static ls_result* ls_syscall_wrapper(char* path, u8 flags) {
-		auto r = syscalls::ls_syscall(path, flags);
-		return (ls_result *)r.data;
-	}
+public: 
+	static void ls_syscall_wrapper(const char *path);
+
+	static void print_ls_result(const ls_result &result, u8 flags);
 };
 } // namespace stacsos
