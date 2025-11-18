@@ -9,6 +9,7 @@
 #include <stacsos/kernel/arch/x86/pio.h>
 #include <stacsos/kernel/debug.h>
 #include <stacsos/kernel/fs/vfs.h>
+#include <stacsos/kernel/fs/fat.h>
 #include <stacsos/kernel/mem/address-space.h>
 #include <stacsos/kernel/mem/copy-to-user.h>
 #include <stacsos/kernel/obj/object-manager.h>
@@ -191,6 +192,35 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 
 		ls_result kernel_result;
 
+		// Look for the directory node.
+		// I know from the kernel/src/main.cpp file that all
+		// files mounted under the root are part of a FAT filesystem.
+		// So we can just use the VFS to look up the path.
+		// And we know it will be FAT specific nodes.
+		fs_node *node = vfs::get().lookup(path_ptr);
+		if (node == nullptr) {
+			// kernel_result.code = syscall_result_code::ok;
+			// kernel_result.result_code = ls_result_code::directory_does_not_exist;
+			// kernel_result.number_entries = 0;
+			// // Copy back the result
+			// copy_to_user(result_buffer, &kernel_result, sizeof(ls_result));
+			dprintf("Directory does not exist: %s\n", path_ptr);
+			return syscall_result { syscall_result_code::ok, 0 };
+		}
+
+		// Ensure it's a directory
+		stacsos::kernel::fs::fs_node_kind kind = node->kind();
+		if (kind != stacsos::kernel::fs::fs_node_kind::directory) {
+			// kernel_result.code = syscall_result_code::ok;
+			// kernel_result.result_code = ls_result_code::file_was_passed;
+			// kernel_result.number_entries = 0;
+			// // Copy back the result
+			// copy_to_user(result_buffer, &kernel_result, sizeof(ls_result));
+			dprintf("Path is not a directory: %s\n", path_ptr);
+			return syscall_result { syscall_result_code::ok, 0 };
+		}
+
+		// It's a directory, perform the listing
 		dprintf("Handling 'ls' syscall for path and flags: %s, %u\n", path_ptr, flags);
 
 		return syscall_result { syscall_result_code::ok, 0 };
