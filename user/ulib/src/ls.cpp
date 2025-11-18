@@ -12,7 +12,7 @@ using namespace stacsos;
  * @return An ls_result structure containing the results of the 'ls' operation.
  */
 
-void ls::ls_syscall_wrapper(const char *path)
+void ls::ls_syscall_wrapper(const char *path, u8 flags)
 {
-	syscalls::ls_syscall(path);
+	syscalls::ls_syscall(path, flags);
 }

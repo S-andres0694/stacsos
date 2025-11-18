@@ -147,7 +147,7 @@ int main(const char *cmdline)
 
     // Perform the 'ls' syscall
 	console::get().writef("Performing 'ls' syscall on path: %s with flags: %u\n", cmdline, flags);
-    ls::ls_syscall_wrapper(cmdline);
+    ls::ls_syscall_wrapper(cmdline, flags);
 	console::get().writef("'ls' syscall completed. Processing results...\n");
 	return 0;
 }

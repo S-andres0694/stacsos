@@ -93,10 +93,10 @@ public:
 	 * @param request The ls_syscall_request structure containing the flags and path for the syscall.
 	 * @param result_buffer The ls_result structure to be filled with the results of the syscall
 	 */
-	static syscall_result ls_syscall(const char *path)
+	static syscall_result ls_syscall(const char *path, u8 flags)
 	{
 		// This syscall does not return a value, instead it fills in the result buffer provided.
-		return syscall1(syscall_numbers::ls_syscall, (u64)path);
+		return syscall2(syscall_numbers::ls_syscall, (u64)path, (u64)flags);
 	}
 
 private:
