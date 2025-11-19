@@ -49,7 +49,7 @@ enum class fs_node_kind { file, directory };
 // Result codes for the 'ls' syscall
 // If the syscall itself was successful, but the operation failed for some reason,
 // I use these codes to indicate the specific failure reason so the console can handle it appropriately.
-enum class ls_result_code { ok = 0, directory_does_not_exist = 1, file_was_passed = 2, unknown_error = 3, directory_empty =4 };
+enum class ls_result_code { ok = 0, directory_does_not_exist = 1, file_was_passed = 2, unknown_error = 3, directory_empty = 4, unsupported_filesystem = 5 };
 
 // 'ls' syscall request structure - used to pass parameters from user space to kernel space
 typedef struct ls_syscall_request {

@@ -197,7 +197,7 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 		// files mounted under the root are part of a FAT filesystem.
 		// So we can just use the VFS to look up the path.
 		// And we know it will be FAT specific nodes.
-		fs_node *node = vfs::get().lookup(path_ptr);
+		auto *node = vfs::get().lookup(path_ptr);
 		if (node == nullptr) {
 			// kernel_result.code = syscall_result_code::ok;
 			// kernel_result.result_code = ls_result_code::directory_does_not_exist;
@@ -217,6 +217,30 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 			// // Copy back the result
 			// copy_to_user(result_buffer, &kernel_result, sizeof(ls_result));
 			dprintf("Path is not a directory: %s\n", path_ptr);
+			return syscall_result { syscall_result_code::ok, 0 };
+		}
+
+		// Ensure that the node is a FAT directory node
+		fs_type_hint type = node->fs().type_hint();
+		if (type != fs_type_hint::fat) {
+			// kernel_result.code = syscall_result_code::ok;
+			// kernel_result.result_code = ls_result_code::unsupported_filesystem;
+			// kernel_result.number_entries = 0;
+			// // Copy back the result
+			// copy_to_user(result_buffer, &kernel_result, sizeof(ls_result));
+			dprintf("Unsupported filesystem for ls: %s\n", path_ptr);
+			return syscall_result { syscall_result_code::ok, 0 };
+		}
+
+		// It's a FAT directory, so we can static cast to a fat_node
+		fat_node &fat_dir_node = static_cast<fat_node &>(*node);
+		if (fat_dir_node.children().count() == 0){
+			// kernel_result.code = syscall_result_code::ok;
+			// kernel_result.result_code = ls_result_code::directory_empty;
+			// kernel_result.number_entries = 0;
+			// // Copy back the result
+			// copy_to_user(result_buffer, &kernel_result, sizeof(ls_result));
+			dprintf("Directory is empty: %s\n", path_ptr);
 			return syscall_result { syscall_result_code::ok, 0 };
 		}
 

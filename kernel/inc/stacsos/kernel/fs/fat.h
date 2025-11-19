@@ -56,6 +56,14 @@ public:
 
 	virtual ~fat_node() { }
 
+	virtual list<fat_node *> &children()
+	{
+		if (!loaded_) {
+			load();
+		}
+		return children_;
+	}
+
 	virtual shared_ptr<file> open() override { return shared_ptr<file>(new fat_file((fat_filesystem &)fs(), cluster_, data_size_)); }
 	virtual fs_node *mkdir(const char *name) override;
 
@@ -86,6 +94,7 @@ public:
 	virtual ~fat_filesystem() { }
 
 	virtual fs_node &root() override { return root_; }
+	virtual fs_type_hint type_hint() const override { return fs_type_hint::fat; }
 
 private:
 	void init();

@@ -24,6 +24,7 @@ public:
 
 	virtual ~filesystem() { }
 	static filesystem *create_from_bdev(dev::storage::block_device &bdev, fs_type_hint hint);
+	virtual fs_type_hint type_hint() const { return fs_type_hint::best_guess; }
 };
 
 class physical_filesystem : public filesystem {
