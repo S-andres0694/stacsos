@@ -16,3 +16,18 @@ void ls::ls_syscall_wrapper(const char *path, u8 flags)
 {
 	syscalls::ls_syscall(path, flags);
 }
+
+/**
+ * Creates a new ls_result structure initialized to default values.
+ * @return A new ls_result structure with default values.
+ */
+
+ls_result ls::new_ls_result()
+{
+	ls_result result;
+	result.code = syscall_result_code::ok;
+	result.result_code = ls_result_code::ok;
+	result.number_entries = 0;
+	memops::memset(result.entries, 0, sizeof(directory_entry) * MAX_RESULT_ENTRIES);
+	return result;
+}
