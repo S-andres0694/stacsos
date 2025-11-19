@@ -230,6 +230,8 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 			// copy_to_user(result_buffer, &kernel_result, sizeof(ls_result));
 			dprintf("Unsupported filesystem for ls: %s\n", path_ptr);
 			return syscall_result { syscall_result_code::ok, 0 };
+		} else {
+			dprintf("FAT filesystem detected for path: %s\n", path_ptr);
 		}
 
 		// It's a FAT directory, so we can static cast to a fat_node
