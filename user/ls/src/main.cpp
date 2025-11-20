@@ -51,6 +51,12 @@ using namespace stacsos;
 // 		case ls_result_code::file_was_passed:
 // 			console::get().write("Error: A file path was provided instead of a directory path.\n");
 // 			break;
+// 		case ls_result_code::directory_empty:
+// 			console::get().write("The specified directory is empty.\n");
+// 			break;
+// 		case ls_result_code::unsupported_filesystem:
+// 			console::get().write("Error: The filesystem of the specified directory is not supported by the 'ls' command.\n");
+// 			break;
 // 		default:
 // 			console::get().write("Error: An unknown error occurred during the 'ls' operation.\n");
 // 			break;
