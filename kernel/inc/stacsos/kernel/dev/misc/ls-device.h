@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stacsos/kernel/dev/misc/ls.h>
+#include <stacsos/syscalls.h>
 
 namespace stacsos::kernel::dev::misc {
     class ls_device: public ls {
@@ -10,7 +11,10 @@ namespace stacsos::kernel::dev::misc {
         ls_device(bus &owner)
             : ls(ls_device_class, owner)
         {
-        }
+			result.code = syscall_result_code::ok;
+			result.result_code = ls_result_code::ok;
+			result.number_entries = 0;
+		}
         
         virtual void configure() override { }
 

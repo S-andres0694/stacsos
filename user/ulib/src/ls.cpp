@@ -28,6 +28,5 @@ ls_result ls::new_ls_result()
 	result.code = syscall_result_code::ok;
 	result.result_code = ls_result_code::ok;
 	result.number_entries = 0;
-	memops::memset(result.entries, 0, sizeof(directory_entry) * MAX_RESULT_ENTRIES);
 	return result;
 }

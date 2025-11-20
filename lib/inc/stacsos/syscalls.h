@@ -85,10 +85,6 @@ typedef struct ls_result {
 
 	// The number of entries returned
 	u64 number_entries;
-
-	// The list of entries returned following the custom type definition.
-	// Hard limit of 256 entries for simplicity and might be changed.
-	directory_entry entries[MAX_RESULT_ENTRIES];
 } ls_result;
 
 } // namespace stacsos

@@ -1,6 +1,7 @@
 #include <stacsos/kernel/dev/misc/ls.h>
 #include <stacsos/kernel/fs/file.h>
 #include <stacsos/syscalls.h>
+#include <stacsos/kernel/debug.h>
 
 using namespace stacsos::kernel::dev;
 using namespace stacsos::kernel::fs;
@@ -27,9 +28,9 @@ public:
 
         ls_.compute_ls(nullptr, 0); // Placeholder: actual node and flags should be passed here.
 
-        result->code = syscall_result_code::ok;
-        result->result_code = ls_result_code::ok;
-        result->number_entries = 0;
+        result->code = this->ls_.result.code;
+        result->result_code = this->ls_.result.result_code;
+        result->number_entries = this->ls_.result.number_entries;
 
         return sizeof(ls_result);
     }
