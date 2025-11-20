@@ -18,7 +18,7 @@ namespace stacsos::kernel::dev::misc {
         
         virtual void configure() override { }
 
-        virtual void compute_ls(stacsos::kernel::fs::fat_node *node, u8 flags) override;
+        virtual void compute_ls(const char* path, u8 flags) override;
 
 	};
 } // namespace stacsos::kernel::dev::misc

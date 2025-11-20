@@ -16,7 +16,7 @@ public:
 	{
 	}
 
-	virtual void compute_ls(stacsos::kernel::fs::fat_node *node, u8 flags);
+	virtual void compute_ls(const char* path, u8 flags);
 
 	virtual shared_ptr<fs::file> open_as_file() override;
 };

@@ -191,63 +191,9 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 		const char *path_ptr = (const char *)arg0;
 		u8 flags = (u8)arg1;
 
-		// Look for the directory node.
-		// I know from the kernel/src/main.cpp file that all
-		// files mounted under the root are part of a FAT filesystem.
-		// So we can just use the VFS to look up the path.
-		// And we know it will be FAT specific nodes.
-		auto *node = vfs::get().lookup(path_ptr);
-		if (node == nullptr) {
-			// kernel_result.code = syscall_result_code::ok;
-			// kernel_result.result_code = ls_result_code::directory_does_not_exist;
-			// kernel_result.number_entries = 0;
-			// // Copy back the result
-			// copy_to_user(result_buffer, &kernel_result, sizeof(ls_result));
-			dprintf("Directory does not exist: %s\n", path_ptr);
-			return syscall_result { syscall_result_code::ok, 0 };
-		}
-
-		// Ensure it's a directory
-		stacsos::kernel::fs::fs_node_kind kind = node->kind();
-		if (kind != stacsos::kernel::fs::fs_node_kind::directory) {
-			// kernel_result.code = syscall_result_code::ok;
-			// kernel_result.result_code = ls_result_code::file_was_passed;
-			// kernel_result.number_entries = 0;
-			// // Copy back the result
-			// copy_to_user(result_buffer, &kernel_result, sizeof(ls_result));
-			dprintf("Path is not a directory: %s\n", path_ptr);
-			return syscall_result { syscall_result_code::ok, 0 };
-		}
-
-		// Ensure that the node is a FAT directory node
-		fs_type_hint type = node->fs().type_hint();
-		if (type != fs_type_hint::fat) {
-			// kernel_result.code = syscall_result_code::ok;
-			// kernel_result.result_code = ls_result_code::unsupported_filesystem;
-			// kernel_result.number_entries = 0;
-			// // Copy back the result
-			// copy_to_user(result_buffer, &kernel_result, sizeof(ls_result));
-			dprintf("Unsupported filesystem for ls: %s\n", path_ptr);
-			return syscall_result { syscall_result_code::ok, 0 };
-		} else {
-			dprintf("FAT filesystem detected for path: %s\n", path_ptr);
-		}
-
-		// It's a FAT directory, so we can static cast to a fat_node
-		fat_node &fat_dir_node = static_cast<fat_node &>(*node);
-		if (fat_dir_node.children().count() == 0){
-			// kernel_result.code = syscall_result_code::ok;
-			// kernel_result.result_code = ls_result_code::directory_empty;
-			// kernel_result.number_entries = 0;
-			// // Copy back the result
-			// copy_to_user(result_buffer, &kernel_result, sizeof(ls_result));
-			dprintf("Directory is empty: %s\n", path_ptr);
-			return syscall_result { syscall_result_code::ok, 0 };
-		}
-
 		auto &dm = stacsos::kernel::dev::device_manager::get();
 
-		dm.get_device_by_name<stacsos::kernel::dev::misc::ls>("ls-device0").compute_ls(&fat_dir_node, flags);
+		dm.get_device_by_name<stacsos::kernel::dev::misc::ls>("ls-device0").compute_ls(path_ptr, flags);
 
 		return syscall_result { syscall_result_code::ok, 0 };
 	}
