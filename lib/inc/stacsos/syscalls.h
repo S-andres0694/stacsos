@@ -85,6 +85,9 @@ typedef struct ls_result {
 
 	// The number of entries returned
 	u64 number_entries;
+
+	// The entries themselves for each file/directory within the listing
+	// directory_entry entries[MAX_RESULT_ENTRIES];
 } ls_result;
 
 } // namespace stacsos

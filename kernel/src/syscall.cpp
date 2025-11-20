@@ -191,8 +191,6 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 		const char *path_ptr = (const char *)arg0;
 		u8 flags = (u8)arg1;
 
-		ls_result kernel_result = ls_result();
-
 		// Look for the directory node.
 		// I know from the kernel/src/main.cpp file that all
 		// files mounted under the root are part of a FAT filesystem.

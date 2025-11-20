@@ -26,8 +26,6 @@ public:
 
         stacsos::ls_result *result = (stacsos::ls_result *)buffer;
 
-        ls_.compute_ls(nullptr, 0); // Placeholder: actual node and flags should be passed here.
-
         result->code = this->ls_.result.code;
         result->result_code = this->ls_.result.result_code;
         result->number_entries = this->ls_.result.number_entries;
