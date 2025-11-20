@@ -1,7 +1,7 @@
 #include <stacsos/kernel/debug.h>
 #include <stacsos/kernel/dev/misc/ls-device.h>
 #include <stacsos/kernel/fs/fat.h>
-#include <stacsos/console.h>
+#include <stacsos/kernel/fs/vfs.h>
 
 using namespace stacsos::kernel::dev;
 using namespace stacsos::kernel::dev::misc;
