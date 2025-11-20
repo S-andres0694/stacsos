@@ -16,6 +16,7 @@
 #include <stacsos/kernel/dev/gfx/qemu-stdvga.h>
 #include <stacsos/kernel/dev/input/keyboard.h>
 #include <stacsos/kernel/dev/misc/cmos-rtc.h>
+#include <stacsos/kernel/dev/misc/ls-device.h>
 #include <stacsos/kernel/dev/storage/ahci-storage-device.h>
 #include <stacsos/kernel/dev/storage/partitioned-device.h>
 #include <stacsos/kernel/dev/tty/terminal.h>
@@ -45,6 +46,9 @@ static void init_console()
 
 	auto rtc = new cmos_rtc(dm.sysbus());
 	dm.register_device(*rtc);
+
+	auto ls_dev = new ls_device(dm.sysbus());
+	dm.register_device(*ls_dev);
 
 	auto kbd = new keyboard(dm.sysbus());
 	dm.register_device(*kbd);

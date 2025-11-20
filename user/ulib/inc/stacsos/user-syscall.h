@@ -96,9 +96,7 @@ public:
 	 */
 	static syscall_result ls_syscall(const char *path, u8 flags)
 	{
-		// This syscall does not return a value, instead it fills in the result buffer provided.
-		ls_result ls_result_buffer = ls_result();
-		return syscall3(syscall_numbers::ls_syscall, (u64)path, (u64)flags, (u64)&ls_result_buffer);
+		return syscall2(syscall_numbers::ls_syscall, (u64)path, (u64)flags);
 	}
 
 private:

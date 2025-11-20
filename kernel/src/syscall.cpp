@@ -8,10 +8,11 @@
 #include <stacsos/kernel/arch/x86/cregs.h>
 #include <stacsos/kernel/arch/x86/pio.h>
 #include <stacsos/kernel/debug.h>
-#include <stacsos/kernel/fs/vfs.h>
+#include <stacsos/kernel/dev/device-manager.h>
+#include <stacsos/kernel/dev/misc/ls-device.h>
 #include <stacsos/kernel/fs/fat.h>
+#include <stacsos/kernel/fs/vfs.h>
 #include <stacsos/kernel/mem/address-space.h>
-#include <stacsos/kernel/mem/copy-to-user.h>
 #include <stacsos/kernel/obj/object-manager.h>
 #include <stacsos/kernel/obj/object.h>
 #include <stacsos/kernel/sched/process-manager.h>
@@ -27,6 +28,7 @@ using namespace stacsos::kernel::obj;
 using namespace stacsos::kernel::fs;
 using namespace stacsos::kernel::mem;
 using namespace stacsos::kernel::arch::x86;
+using namespace stacsos::kernel::dev;
 
 static syscall_result do_open(process &owner, const char *path)
 {
@@ -188,7 +190,6 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 		// Cast the user space pointers
 		const char *path_ptr = (const char *)arg0;
 		u8 flags = (u8)arg1;
-		ls_result *result_buffer = (ls_result *)arg2;
 
 		ls_result kernel_result = ls_result();
 
@@ -245,6 +246,10 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 			dprintf("Directory is empty: %s\n", path_ptr);
 			return syscall_result { syscall_result_code::ok, 0 };
 		}
+
+		auto &dm = stacsos::kernel::dev::device_manager::get();
+
+		dm.get_device_by_name<stacsos::kernel::dev::misc::ls>("ls-device0").compute_ls(&fat_dir_node, flags);
 
 		return syscall_result { syscall_result_code::ok, 0 };
 	}
