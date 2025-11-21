@@ -11,7 +11,7 @@ device_class ls_device::ls_device_class(ls::ls_device_class, "ls-device");
 
 void ls_device::compute_ls(const char* path, u8 flags) {
     // Clear the previous result
-    memops::memset(&this->result, 0, sizeof(ls_result));
+    memops::memset(&this->prod.result, 0, sizeof(final_product));
 
 	// Look for the directory node.
 	// I know from the kernel/src/main.cpp file that all
@@ -20,9 +20,9 @@ void ls_device::compute_ls(const char* path, u8 flags) {
 	// And we know it will be FAT specific nodes.
 	auto *node = vfs::get().lookup(path);
 	if (node == nullptr) {
-		this->result.code = syscall_result_code::ok;
-		this->result.result_code = ls_result_code::directory_does_not_exist;
-		this->result.number_entries = 0;
+		this->prod.result.code = syscall_result_code::ok;
+		this->prod.result.result_code = ls_result_code::directory_does_not_exist;
+		this->prod.result.number_entries = 0;
 		dprintf("Directory does not exist: %s\n", path);
 		return;
 	}
@@ -30,9 +30,9 @@ void ls_device::compute_ls(const char* path, u8 flags) {
 	// Ensure it's a directory
 	stacsos::kernel::fs::fs_node_kind kind = node->kind();
 	if (kind != stacsos::kernel::fs::fs_node_kind::directory) {
-		this->result.code = syscall_result_code::ok;
-		this->result.result_code = ls_result_code::file_was_passed;
-		this->result.number_entries = 0;
+		this->prod.result.code = syscall_result_code::ok;
+		this->prod.result.result_code = ls_result_code::file_was_passed;
+		this->prod.result.number_entries = 0;
 		dprintf("Path is not a directory: %s\n", path);
 		return;
 	}
@@ -40,9 +40,9 @@ void ls_device::compute_ls(const char* path, u8 flags) {
 	// Ensure that the node is a FAT directory node
 	fs_type_hint type = node->fs().type_hint();
 	if (type != fs_type_hint::fat) {
-		this->result.code = syscall_result_code::ok;
-		this->result.result_code = ls_result_code::unsupported_filesystem;
-		this->result.number_entries = 0;
+		this->prod.result.code = syscall_result_code::ok;
+		this->prod.result.result_code = ls_result_code::unsupported_filesystem;
+		this->prod.result.number_entries = 0;
 		dprintf("Unsupported filesystem for ls: %s\n", path);
 		return;
 	} else {
@@ -52,24 +52,39 @@ void ls_device::compute_ls(const char* path, u8 flags) {
 	// It's a FAT directory, so we can static cast to a fat_node
 	fat_node &fat_dir_node = static_cast<fat_node &>(*node);
 	if (fat_dir_node.children().count() == 0) {
-		this->result.code = syscall_result_code::ok;
-		this->result.result_code = ls_result_code::directory_empty;
-		this->result.number_entries = 0;
+		this->prod.result.code = syscall_result_code::ok;
+		this->prod.result.result_code = ls_result_code::directory_empty;
+		this->prod.result.number_entries = 0;
 		dprintf("Directory is empty: %s\n", path);
 		return;
 	}
 
-	this->result.code = syscall_result_code::ok;
-    this->result.result_code = ls_result_code::ok;
-    this->result.number_entries = fat_dir_node.children().count(); 
 	for (const auto &child : fat_dir_node.children()) {
+		u64 idx = this->prod.result.number_entries;
+		// Prevent overflow of the entries buffer
+		if (idx >= MAX_RESULT_ENTRIES) {
+			dprintf("[WARN] Too many directory entries — skipping '%s'\n", child->name().c_str());
+			continue;
+		}
+		directory_entry &entry = this->prod.entries[idx];
+		// Copy name safely
+		memops::strncpy(entry.name, child->name().c_str(), sizeof(entry.name) - 1);
+		entry.name[sizeof(entry.name) - 1] = '\0';
+		// Determine type
 		stacsos::kernel::fs::fs_node_kind type = child->kind();
 		if (type == stacsos::kernel::fs::fs_node_kind::directory) {
-			dprintf("[DIR]  %s\n", child->name().c_str());
+			entry.type = fs_node_kind::directory;
+			entry.size = 0;
+			dprintf("[DIR] %s\n", child->name().c_str());
 		} else {
+			entry.type = fs_node_kind::file;
+			entry.size = child->data_size();
 			dprintf("[FILE] %s with size %llu\n", child->name().c_str(), child->data_size());
 		}
+		// Only increment after successfully filling the entry
+		this->prod.result.number_entries++;
 	}
-    dprintf("ls_device::compute_ls called\n");
-    return;
+
+	dprintf("ls_device::compute_ls called\n");
+	return;
 }

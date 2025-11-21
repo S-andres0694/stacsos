@@ -13,18 +13,18 @@ using namespace stacsos;
  * @param result The ls_result structure containing directory entries.
  * @return The maximum length of the names of the entries.
  */
-// int get_max_name_length(const ls_result &result)
-// {
-// 	int max_len = 0;
-// 	for (u64 i = 0; i < result.number_entries; i++) {
-// 		const directory_entry &entry = result.entries[i];
-// 		int len = memops::strlen(entry.name);
-// 		if (len > max_len) {
-// 			max_len = len;
-// 		}
-// 	}
-// 	return max_len;
-// }
+int get_max_name_length(const final_product &result)
+{
+	int max_len = 0;
+	for (u64 i = 0; i < result.result.number_entries; i++) {
+		const directory_entry &entry = result.entries[i];
+		int len = memops::strlen(entry.name);
+		if (len > max_len) {
+			max_len = len;
+		}
+	}
+	return max_len;
+}
 
 /**
  * Function to print the results of the 'ls' syscall based on the provided flags.
@@ -33,80 +33,89 @@ using namespace stacsos;
  * @param flags The ls_flags structure indicating how to format the output.
  */
 
-// void ls::print_ls_result(const ls_result &result, u8 flags)
-// {
-// 	// This code is probably unreachable because I can guarantee that the syscall will always exist.
-// 	if (result.code != syscall_result_code::ok) {
-// 		console::get().write("Error: Unable to perform 'ls' operation.\nThere was an error resolving the necessary syscall.\n");
-// 		return;
-// 	}
+void ls::print_ls_result(const final_product &result, u8 flags)
+{
+	// This code is probably unreachable because I can guarantee that the syscall will always exist.
+	if (result.result.code != syscall_result_code::ok) {
+		console::get().write("Error: Unable to perform 'ls' operation.\nThere was an error resolving the necessary syscall.\n");
+		return;
+	}
 
-// 	// Check the result code for the 'ls' operation and handle errors accordingly
-// 	// to notify the user something went wrong.
-// 	if (result.result_code != ls_result_code::ok) {
-// 		switch (result.result_code) {
-// 		case ls_result_code::directory_does_not_exist:
-// 			console::get().write("Error: The specified directory does not exist.\n");
-// 			break;
-// 		case ls_result_code::file_was_passed:
-// 			console::get().write("Error: A file path was provided instead of a directory path.\n");
-// 			break;
-// 		case ls_result_code::directory_empty:
-// 			console::get().write("The specified directory is empty.\n");
-// 			break;
-// 		case ls_result_code::unsupported_filesystem:
-// 			console::get().write("Error: The filesystem of the specified directory is not supported by the 'ls' command.\n");
-// 			break;
-// 		default:
-// 			console::get().write("Error: An unknown error occurred during the 'ls' operation.\n");
-// 			break;
-// 		}
-// 		return;
-// 	}
+	// Check the result code for the 'ls' operation and handle errors accordingly
+	// to notify the user something went wrong.
+	if (result.result.result_code != ls_result_code::ok) {
+		switch (result.result.result_code) {
+		case ls_result_code::directory_does_not_exist:
+			console::get().write("Error: The specified directory does not exist.\n");
+			break;
+		case ls_result_code::file_was_passed:
+			console::get().write("Error: A file path was provided instead of a directory path.\n");
+			break;
+		case ls_result_code::directory_empty:
+			console::get().write("The specified directory is empty.\n");
+			break;
+		case ls_result_code::unsupported_filesystem:
+			console::get().write("Error: The filesystem of the specified directory is not supported by the 'ls' command.\n");
+			break;
+		default:
+			console::get().write("Error: An unknown error occurred during the 'ls' operation.\n");
+			break;
+		}
+		return;
+	}
 
-// 	// Print the directory entries based on the flags provided
-// 	for (u64 i = 0; i < result.number_entries; i++) {
-// 		const directory_entry &entry = result.entries[i];
-// 		// Long listing format based on the specification sheet.
-// 		if (flags & LS_FLAG_LONG_LISTING) {
-// 			// Determine the maximum name length for formatting
-// 			// Also set up column widths accordingly.
-// 			int max_name_length = get_max_name_length(result);
+	// Print the directory entries based on the flags provided
+	for (u64 i = 0; i < result.result.number_entries; i++) {
+		const directory_entry &entry = result.entries[i];
 
-// 			// Minimum spaces between columns. Just hardcoded it and chose
-// 			// because it looks reasonable.
-// 			int minimum_padding = 6;
+		// Skip the '.' and '..' entries as per the spec
+		if ((entry.name[0] == '.' && entry.name[1] == '\0') || (entry.name[0] == '.' && entry.name[1] == '.' && entry.name[2] == '\0')) {
+			continue;
+		}
 
-// 			// The width should be the maximum name length plus some padding.
-// 			int NAME_COLUMN_WIDTH = max_name_length + minimum_padding;
+		// Long listing format based on the specification sheet.
+		if (flags & LS_FLAG_LONG_LISTING) {
+			// Determine the maximum name length for formatting
+			// Also set up column widths accordingly.
+			int max_name_length = get_max_name_length(result);
 
-// 			char type_char = (entry.type == fs_node_kind::directory) ? 'D' : 'F';
+			// Minimum spaces between columns. Just hardcoded it and chose
+			// because it looks reasonable.
+			int minimum_padding = 6;
 
-// 			console::get().writef("[%c] %s", type_char, entry.name);
+			// The width should be the maximum name length plus some padding.
+			int NAME_COLUMN_WIDTH = max_name_length + minimum_padding;
 
-// 			// Calculate padding dynamically based on the name length.
-// 			int name_len = memops::strlen(entry.name);
-// 			int padding = NAME_COLUMN_WIDTH - name_len;
+			char type_char = (entry.type == fs_node_kind::directory) ? 'D' : 'F';
 
-// 			// Make sure there's at least one space of padding, regardless of the
-// 			// name length.
-// 			if (padding < 1) {
-// 				padding = 1;
-// 			}
+			console::get().writef("[%c] %s", type_char, entry.name);
 
-// 			// Add the padding dynamically.
-// 			for (int j = 0; j < padding; j++) {
-// 				console::get().write(" ");
-// 			}
+			// Calculate padding dynamically based on the name length.
+			int name_len = memops::strlen(entry.name);
+			int padding = NAME_COLUMN_WIDTH - name_len;
 
-// 			// Prints the file size in bytes.
-// 			console::get().writef("%llu\n", entry.size);
-// 		} else {
-// 			// Simple listing format
-// 			console::get().writef("%s\n", entry.name);
-// 		}
-// 	}
-// }
+			// Make sure there's at least one space of padding, regardless of the
+			// name length.
+			if (padding < 1) {
+				padding = 1;
+			}
+
+			// Add the padding dynamically.
+			for (int j = 0; j < padding; j++) {
+				console::get().write(" ");
+			}
+
+			if (entry.type == fs_node_kind::file) {
+				console::get().writef("%llu\n", entry.size);
+			} else {
+				console::get().writef("\n");
+			}
+		} else {
+			// Simple listing format
+			console::get().writef("%s\n", entry.name);
+		}
+	}
+}
 
 int main(const char *cmdline)
 {
@@ -162,19 +171,14 @@ int main(const char *cmdline)
 		return 1;
 	}
 
-	ls_result result;
-	size_t bytes_read = file->pread(&result, sizeof(ls_result), 0);
+	final_product result;
+	size_t bytes_read = file->pread(&result, sizeof(final_product), 0);
 
 	 if (bytes_read != sizeof(result)) {
 	 	console::get().write("Error: Unable to read ls result from /dev/ls-device0\n");
 	 	return 1;
 	}
 
-	// ls::print_ls_result(result, flags);
-
-	console::get().writef("Number of entries: %llu\n", result.number_entries);
-	console::get().writef("Result code: %u\n", result.result_code);
-	console::get().writef("Syscall result code: %u\n", result.code);
-
+	ls::print_ls_result(result, flags);
 	return 0;
 }

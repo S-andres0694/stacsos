@@ -6,8 +6,12 @@
  * Tom Spink <tcs6@st-andrews.ac.uk>
  */
 #pragma once
-#define MAX_PATHNAME_LENGTH 256
-#define MAX_RESULT_ENTRIES 256
+
+// I defined these by attempting to see how high I could go without causing
+// page faults or other issues in QEMU. These are the maximum sizes I could arrive
+// at that still worked reliably.
+#define MAX_PATHNAME_LENGTH 128 
+#define MAX_RESULT_ENTRIES 50
 // Example flag for long listing format. The bitfield would be 00000001
 // Can extend this further by adding more #define statements with increasing bit values as the second number is the index of the bit to set.
 #define LS_FLAG_LONG_LISTING (1 << 0)
@@ -86,8 +90,19 @@ typedef struct ls_result {
 	// The number of entries returned
 	u64 number_entries;
 
-	// The entries themselves for each file/directory within the listing
-	// directory_entry entries[MAX_RESULT_ENTRIES];
 } ls_result;
+
+/**
+ * Final product structure for the 'ls' syscall. This contains the result structure
+ * and an array of directory entries.
+ * For some reason adding the array onto the ls_result struct itself caused issues with
+ * page faults and even QEMU Crashes, so I've created this separate struct to hold both the result
+ * and the entries.
+ */
+
+struct final_product {
+	ls_result result;
+	directory_entry entries[MAX_RESULT_ENTRIES];
+};
 
 } // namespace stacsos

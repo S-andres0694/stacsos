@@ -9,7 +9,7 @@ class ls : public device {
 public:
 	static device_class ls_device_class;
 
-	ls_result result;
+	final_product prod;
 
 	ls(device_class &dc, bus &owner)
 		: device(dc, owner)

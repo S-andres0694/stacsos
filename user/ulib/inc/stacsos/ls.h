@@ -11,7 +11,7 @@ class ls {
 public: 
 	static void ls_syscall_wrapper(const char *path, u8 flags);
 
-	static void print_ls_result(const ls_result &result, u8 flags);
+	static void print_ls_result(const final_product &result, u8 flags);
 
 	static ls_result new_ls_result();
 };
