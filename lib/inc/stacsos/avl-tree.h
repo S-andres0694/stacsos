@@ -150,6 +150,33 @@ public:
 
 	void dump() const { do_dump(root_); }
 
+	/**
+	 * Returns the number of nodes in the tree.
+	 * In my case, I use it to get the count of cached entries.
+	 * for my ls_cache implementation.
+	 */
+
+	size_t size() const
+	{
+		size_t count = 0;
+		for (auto it = begin(); it != end(); ++it) {
+			count++;
+		}
+		return count;
+	}
+
+	/**
+	 * Erase a node by key.
+	 * Returns true if a node was removed, false if not found.
+	 */
+
+	bool erase(const K &key)
+	{
+		bool removed = false;
+		root_ = do_delete(root_, key, removed);
+		return removed;
+	}
+
 	const_iterator begin() const { return const_iterator(root_); }
 	const_iterator end() const { return const_iterator(nullptr); }
 
@@ -220,6 +247,90 @@ private:
 			ref->right(do_insert(ref->right(), key, data));
 			return balance(ref);
 		}
+	}
+
+	/**
+	 * Deletes a node by key and returns the new subtree root.
+	 * Sets `removed` to true if a node was deleted.
+	 */
+
+	node *do_delete(node *ref, const K &key, bool &removed)
+	{
+		if (ref == nullptr) {
+			return nullptr;
+		}
+
+		if (key < ref->key()) {
+			ref->left(do_delete(ref->left(), key, removed));
+		} else if (key > ref->key()) {
+			ref->right(do_delete(ref->right(), key, removed));
+		} else {
+			// Found the node
+			removed = true;
+
+			// No children
+			if (!ref->left() && !ref->right()) {
+				delete ref;
+				return nullptr;
+			}
+
+			// One child
+			if (!ref->left()) {
+				node *right = ref->right();
+				delete ref;
+				return right;
+			}
+			if (!ref->right()) {
+				node *left = ref->left();
+				delete ref;
+				return left;
+			}
+
+			// Two children
+			// Replace node with smallest node from right subtree
+			node *min_right = extract_min(ref->right());
+
+			// Re attach the children
+			min_right->left(ref->left());
+			min_right->right(ref->right());
+
+			delete ref;
+			ref = min_right;
+		}
+
+		return balance(ref);
+	}
+
+	/**
+	 * By taking a reference node, finds and extracts the minimum node
+	 * from that subtree, rebalancing as necessary.
+	 */
+
+	node *extract_min(node *ref)
+	{
+		// If this is the leftmost node, detach it and return it
+		if (!ref->left()) {
+			return ref;
+		}
+
+		node *parent = ref;
+		node *child = ref->left();
+		while (child->left()) {
+			parent = child;
+			child = child->left();
+		}
+
+		// Detach child
+		if (child->right()) {
+			parent->left(child->right());
+		} else {
+			parent->left(nullptr);
+		}
+
+		// Rebalance on the way up
+		parent = balance(parent);
+
+		return child;
 	}
 };
 } // namespace stacsos

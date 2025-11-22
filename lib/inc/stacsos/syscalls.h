@@ -105,4 +105,13 @@ struct final_product {
 	directory_entry entries[MAX_RESULT_ENTRIES];
 };
 
+/**
+ * Cache entry structure for the ls_cache.
+ * This holds the final product and a dirty bit to indicate if the cache entry is stale.
+ */
+
+struct cache_entry {
+	final_product product; // The cached final product
+	bool dirty_bit; // Used to determine if the cache entry is stale
+};
 } // namespace stacsos
