@@ -105,22 +105,22 @@ struct final_product {
 	ls_result result;
 	directory_entry entries[MAX_RESULT_ENTRIES];
 
-	// Copy assignment operator
-
 	final_product &operator=(const final_product &other)
 	{
 		if (this != &other) {
-			memops::memcpy(this, &other, sizeof(final_product));
+			this->result = other.result;
+			memops::memcpy(this->entries, other.entries, sizeof(entries));
 		}
 		return *this;
 	}
 
 	final_product() = default;
 
-	// Copy constructor
 	final_product(const final_product &other)
 	{
-		memops::memcpy(this, &other, sizeof(final_product));
+		this->result = other.result;
+		memops::memcpy(this->entries, other.entries, sizeof(entries));
 	}
 };
+// ...existing code...
 } // namespace stacsos

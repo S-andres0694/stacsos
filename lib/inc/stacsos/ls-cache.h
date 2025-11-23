@@ -12,11 +12,13 @@
 #include <stacsos/map.h>
 #include <stacsos/syscalls.h>
 #include <stacsos/list.h>
+#include <stacsos/string.h>
 
 namespace stacsos {
 class ls_cache {
 public:
-	using key_t = const char *;
+	using key_t = u64; // Using the hash of the string as the key. Originally, tried using a char array but ran into issues with
+	// the lookups not working properly.
 	using value_t = final_product;
 	using map_t = stacsos::map<key_t, value_t>;
 
@@ -34,12 +36,12 @@ public:
      * @return true if the entry was added/updated successfully.
      */
 
-	bool put(const char *name, value_t entry)
+	bool put(string &name, value_t entry)
 	{
-		key_t k(name);
+		key_t k = key_t(name.get_hash());
 		if (count >= max_size_) {
             // Evict the oldest entry
-            const char *oldest_key = keys_.dequeue();
+            key_t oldest_key = keys_.dequeue();
 			map_.erase(oldest_key);
             count--;
         }
@@ -57,15 +59,15 @@ public:
      * @return true if the entry was found, false otherwise.
      */
 
-	bool lookup(const char *name, value_t &out) 
+	bool lookup(string &name, value_t &out) 
 	{
-		key_t k(name);
+		key_t k = key_t(name.get_hash());
 		return map_.try_get_value(k, out);
 	}
 
 private:
 	map_t map_; // The underlying map storing cache entries
-    list<const char *> keys_; // List of keys for managing the oldest entries
+    list<key_t> keys_; // List of keys for managing the oldest entries
     size_t max_size_ = 8; // Maximum number of cache entries. Number chose arbitrarily with hope of balancing memory use and cache hits.
 	u8 count = 0; // Current number of entries. I use this instead of counting
 	// through the map for performance reasons.

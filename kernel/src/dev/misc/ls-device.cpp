@@ -35,13 +35,16 @@ void ls_device::compute_ls(const char* path, u8 flags) {
 
 	final_product cache_ent;
 	// Check the cache first
-	if (this->cache_.lookup(path, cache_ent)) {
+	stacsos::string path_str(path);
+	if (this->cache_.lookup(path_str, cache_ent)) {
 		// Make sure the cache entry is not dirty
 		if (node ->dirty_cache_bit) {
 			dprintf("Cache entry is dirty for path: %s\n", path);
 		} else {
 			dprintf("Cache hit for path: %s\n", path);
 			this->prod = cache_ent;
+			memops::strncpy(this->last_lookup_path, path, sizeof(this->last_lookup_path) - 1);
+			this->last_lookup_path[sizeof(this->last_lookup_path) - 1] = '\0';
 			return;
 		}
 	} else {
@@ -96,26 +99,27 @@ void ls_device::compute_ls(const char* path, u8 flags) {
 		if (type == stacsos::kernel::fs::fs_node_kind::directory) {
 			entry.type = fs_node_kind::directory;
 			entry.size = 0;
-			dprintf("[DIR] %s\n", child->name().c_str());
 		} else {
 			entry.type = fs_node_kind::file;
 			entry.size = child->data_size();
-			dprintf("[FILE] %s with size %llu\n", child->name().c_str(), child->data_size());
 		}
 		// Only increment after successfully filling the entry
 		this->prod.result.number_entries++;
 	}
 
 	// Add the result to the cache
-	final_product new_cache_entry;
-	this->prod = new_cache_entry;
-	this->cache_.put(path, new_cache_entry);
+	final_product new_cache_entry = this->prod;
+	this->cache_.put(path_str, new_cache_entry);
+
+	// Update the last lookup path
 	memops::strncpy(this->last_lookup_path, path, sizeof(this->last_lookup_path) - 1);
 	this->last_lookup_path[sizeof(this->last_lookup_path) - 1] = '\0';
+	dprintf("Last lookup path updated to: %s\n", this->last_lookup_path);
+
+	// Mark the cache as clean
 	node->dirty_cache_bit = false;
+
+
 	dprintf("Cached ls result for path: %s\n", path);
-	dprintf("ls_device::compute_ls called\n");
-	return;
-	dprintf("ls_device::compute_ls called\n");
 	return;
 }
