@@ -119,7 +119,6 @@ void ls_device::compute_ls(const char* path, u8 flags) {
 	// Mark the cache as clean
 	node->dirty_cache_bit = false;
 
-
 	dprintf("Cached ls result for path: %s\n", path);
 	return;
 }
