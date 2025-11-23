@@ -143,6 +143,7 @@ fs_node *fat_node::mkdir(const char *name)
 {
 	auto new_dir = new fat_node(fs(), this, fs_node_kind::directory, string(name), 0, 0, 0);
 	children_.append(new_dir);
+	dirty_cache_bit = true;
 
 	return new_dir;
 }

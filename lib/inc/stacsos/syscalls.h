@@ -6,6 +6,7 @@
  * Tom Spink <tcs6@st-andrews.ac.uk>
  */
 #pragma once
+#include <stacsos/memops.h>
 
 // I defined these by attempting to see how high I could go without causing
 // page faults or other issues in QEMU. These are the maximum sizes I could arrive
@@ -103,15 +104,23 @@ typedef struct ls_result {
 struct final_product {
 	ls_result result;
 	directory_entry entries[MAX_RESULT_ENTRIES];
-};
 
-/**
- * Cache entry structure for the ls_cache.
- * This holds the final product and a dirty bit to indicate if the cache entry is stale.
- */
+	// Copy assignment operator
 
-struct cache_entry {
-	final_product product; // The cached final product
-	bool dirty_bit; // Used to determine if the cache entry is stale
+	final_product &operator=(const final_product &other)
+	{
+		if (this != &other) {
+			memops::memcpy(this, &other, sizeof(final_product));
+		}
+		return *this;
+	}
+
+	final_product() = default;
+
+	// Copy constructor
+	final_product(const final_product &other)
+	{
+		memops::memcpy(this, &other, sizeof(final_product));
+	}
 };
 } // namespace stacsos

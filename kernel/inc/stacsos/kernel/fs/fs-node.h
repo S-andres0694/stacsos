@@ -28,6 +28,8 @@ public:
 	{
 	}
 
+	bool dirty_cache_bit = false;
+
 	void mount(filesystem &fs) { mounted_fs_ = &fs; }
 	void umount() { mounted_fs_ = nullptr; }
 

@@ -10,9 +10,14 @@ class ls : public device {
 public:
 	static device_class ls_device_class;
 
+	// The computed ls result	
 	final_product prod;
 
+	// The ls cache for the device
 	ls_cache cache_;
+
+	// The last lookup path to compare against for another layer of caching.
+	char last_lookup_path[MAX_PATHNAME_LENGTH];
 
 	ls(device_class &dc, bus &owner)
 		: device(dc, owner)

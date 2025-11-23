@@ -11,17 +11,13 @@ using namespace stacsos::kernel::fs;
 device_class ls_device::ls_device_class(ls::ls_device_class, "ls-device");
 
 void ls_device::compute_ls(const char* path, u8 flags) {
-    // Clear the previous result
-    memops::memset(&this->prod.result, 0, sizeof(final_product));
-
-	cache_entry cache_ent;
-	// Check the cache first
-	if (this->cache_.lookup(path, cache_ent)) {
-		dprintf("Cache hit for path: %s\n", path);
+    if (stacsos::memops::strcmp(path, this->last_lookup_path) == 0) {
+		dprintf("Path matches last lookup path: %s\n", path);
 		return;
-	} else {
-		dprintf("Cache miss for path: %s\n", path);
 	}
+
+	// Clear the previous result since we're computing a new one
+	memops::memset(&this->prod.result, 0, sizeof(final_product));
 
 	// Look for the directory node.
 	// I know from the kernel/src/main.cpp file that all
@@ -35,6 +31,21 @@ void ls_device::compute_ls(const char* path, u8 flags) {
 		this->prod.result.number_entries = 0;
 		dprintf("Directory does not exist: %s\n", path);
 		return;
+	}
+
+	final_product cache_ent;
+	// Check the cache first
+	if (this->cache_.lookup(path, cache_ent)) {
+		// Make sure the cache entry is not dirty
+		if (node ->dirty_cache_bit) {
+			dprintf("Cache entry is dirty for path: %s\n", path);
+		} else {
+			dprintf("Cache hit for path: %s\n", path);
+			this->prod = cache_ent;
+			return;
+		}
+	} else {
+		dprintf("Cache miss for path: %s\n", path);
 	}
 
 	// Ensure it's a directory
@@ -96,12 +107,15 @@ void ls_device::compute_ls(const char* path, u8 flags) {
 	}
 
 	// Add the result to the cache
-	cache_entry new_cache_entry;
-	new_cache_entry.dirty_bit = false;
+	final_product new_cache_entry;
+	this->prod = new_cache_entry;
+	this->cache_.put(path, new_cache_entry);
+	memops::strncpy(this->last_lookup_path, path, sizeof(this->last_lookup_path) - 1);
+	this->last_lookup_path[sizeof(this->last_lookup_path) - 1] = '\0';
+	node->dirty_cache_bit = false;
 	dprintf("Cached ls result for path: %s\n", path);
 	dprintf("ls_device::compute_ls called\n");
 	return;
-
 	dprintf("ls_device::compute_ls called\n");
 	return;
 }
