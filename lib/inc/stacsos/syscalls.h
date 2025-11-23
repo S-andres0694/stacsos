@@ -11,7 +11,7 @@
 // I defined these by attempting to see how high I could go without causing
 // page faults or other issues in QEMU. These are the maximum sizes I could arrive
 // at that still worked reliably.
-#define MAX_PATHNAME_LENGTH 128 
+#define MAX_PATHNAME_LENGTH 128
 #define MAX_RESULT_ENTRIES 50
 // Example flag for long listing format. The bitfield would be 00000001
 // Can extend this further by adding more #define statements with increasing bit values as the second number is the index of the bit to set.
@@ -105,22 +105,21 @@ struct final_product {
 	ls_result result;
 	directory_entry entries[MAX_RESULT_ENTRIES];
 
-	// Copy assignment operator
-
 	final_product &operator=(const final_product &other)
 	{
 		if (this != &other) {
-			memops::memcpy(this, &other, sizeof(final_product));
+			this->result = other.result;
+			memops::memcpy(this->entries, other.entries, sizeof(entries));
 		}
 		return *this;
 	}
 
 	final_product() = default;
 
-	// Copy constructor
 	final_product(const final_product &other)
 	{
-		memops::memcpy(this, &other, sizeof(final_product));
+		this->result = other.result;
+		memops::memcpy(this->entries, other.entries, sizeof(entries));
 	}
 };
 } // namespace stacsos
