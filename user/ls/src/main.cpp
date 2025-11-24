@@ -1,15 +1,15 @@
 #include <stacsos/console.h>
-#include <stacsos/memops.h>
 #include <stacsos/ls.h>
-#include <stacsos/syscalls.h>
+#include <stacsos/memops.h>
 #include <stacsos/objects.h>
+#include <stacsos/syscalls.h>
 
 using namespace stacsos;
 
 /**
  * Helper function to determine the maximum name length among directory entries.
  * This is used for formatting the output in long listing mode.
- * 
+ *
  * @param result The ls_result structure containing directory entries.
  * @return The maximum length of the names of the entries.
  */
@@ -68,9 +68,11 @@ void ls::print_ls_result(const final_product &result, u8 flags)
 	for (u64 i = 0; i < result.result.number_entries; i++) {
 		const directory_entry &entry = result.entries[i];
 
-		// Skip the '.' and '..' entries as per the spec
-		if ((entry.name[0] == '.' && entry.name[1] == '\0') || (entry.name[0] == '.' && entry.name[1] == '.' && entry.name[2] == '\0')) {
-			continue;
+		if (!(flags & LS_FLAG_ALL_FILES)) {
+			// Skip hidden files (those starting with a dot) if the ALL_FILES flag is not set
+			if ((entry.name[0] == '.' && entry.name[1] == '\0') || (entry.name[0] == '.' && entry.name[1] == '.' && entry.name[2] == '\0')) {
+				continue;
+			}
 		}
 
 		// Long listing format based on the specification sheet.
@@ -121,37 +123,46 @@ int main(const char *cmdline)
 {
 	// Validate command line arguments
 	if (cmdline == nullptr || cmdline[0] == '\0') {
-		console::get().write("Usage: ls <path>\n");
+		console::get().write("Usage: ls [-lahr] <path>\n");
 		return 1;
 	}
 
 	// Check if the flags are set.
-	// Took this from a similar piece of code in user/cat/src/main.cpp
 	u8 flags = 0;
-	while (*cmdline) {
-		if (*cmdline == '-') {
-			cmdline++;
 
-			// Will add checks for more flags here if necessary.
-			if (*cmdline++ == 'l') {
+	// Parse flags
+	if (*cmdline == '-') {
+		cmdline++; // skip '-'
+		while (*cmdline && *cmdline != ' ') {
+			switch (*cmdline) {
+			case 'l':
 				flags |= LS_FLAG_LONG_LISTING;
-			} else {
-				console::get().write("error: usage: ls [-l] <path>\n");
+				break;
+			case 'a':
+				flags |= LS_FLAG_ALL_FILES;
+				break;
+			case 'h':
+				flags |= LS_FLAG_HUMAN_READABLE;
+				break;
+			case 'r':
+				flags |= LS_FLAG_RECURSIVE;
+				break;
+			default:
+				console::get().write("error: usage: ls [-lahr] <path>\n");
 				return 1;
 			}
-		} else {
-			break;
+			cmdline++; // move to the next flag character
 		}
 	}
 
-    // Skip any spaces between flags and the path
+	// Skip any spaces between flags and the path
 	while (*cmdline == ' ') {
 		cmdline++;
 	}
 
 	// Ensures that the path is not empty after checking the flags
 	if (*cmdline == '\0') {
-		console::get().write("error: usage: ls [-l] <path>\n");
+		console::get().write("error: usage: ls [-lahr] <path>\n");
 		return 1;
 	}
 
@@ -161,8 +172,8 @@ int main(const char *cmdline)
 		return 1;
 	}
 
-    // Perform the 'ls' syscall to write to the device
-    ls::ls_syscall_wrapper(cmdline, flags);
+	// Perform the 'ls' syscall to write to the device
+	ls::ls_syscall_wrapper(cmdline, flags);
 
 	object *file = object::open("/dev/ls-device0");
 
@@ -174,9 +185,9 @@ int main(const char *cmdline)
 	final_product result;
 	size_t bytes_read = file->pread(&result, sizeof(final_product), 0);
 
-	 if (bytes_read != sizeof(result)) {
-	 	console::get().write("Error: Unable to read ls result from /dev/ls-device0\n");
-	 	return 1;
+	if (bytes_read != sizeof(result)) {
+		console::get().write("Error: Unable to read ls result from /dev/ls-device0\n");
+		return 1;
 	}
 
 	ls::print_ls_result(result, flags);

@@ -13,9 +13,11 @@
 // at that still worked reliably.
 #define MAX_PATHNAME_LENGTH 128
 #define MAX_RESULT_ENTRIES 50
-// Example flag for long listing format. The bitfield would be 00000001
 // Can extend this further by adding more #define statements with increasing bit values as the second number is the index of the bit to set.
-#define LS_FLAG_LONG_LISTING (1 << 0)
+#define LS_FLAG_LONG_LISTING (1 << 0) // Flag for long listing format. The bitfield would be 00000001
+#define LS_FLAG_ALL_FILES (1 << 1) // Includes hidden files (those starting with a dot).
+#define LS_FLAG_HUMAN_READABLE (1 << 2) // Displays file sizes in a human-readable format (e.g., KB, MB).
+#define LS_FLAG_RECURSIVE (1 << 3) // Lists subdirectories of a directory recursively.
 
 namespace stacsos {
 enum class syscall_result_code : u64 { ok = 0, not_found = 1, not_supported = 2 };
