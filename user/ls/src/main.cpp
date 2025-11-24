@@ -2,6 +2,7 @@
 #include <stacsos/ls.h>
 #include <stacsos/memops.h>
 #include <stacsos/objects.h>
+#include <stacsos/string.h>
 #include <stacsos/syscalls.h>
 
 using namespace stacsos;
@@ -24,6 +25,28 @@ int get_max_name_length(const final_product &result)
 		}
 	}
 	return max_len;
+}
+
+/**
+ * Allows for an optimized printing for the -h flag (human-readable file sizes).
+ * It does so by converting the size in bytes to a more human-friendly format.
+ * Heavily inspired by https://stackoverflow.com/questions/281640/how-do-i-get-a-human-readable-file-size-in-bytes-abbreviation-using-net
+ * answer by Adrian Hum.
+ * The function has a small invariance within the precision. Because the OS does not seem to support floating-point operations, the precision margin of this
+ * function is limited.
+ * @param size The size in bytes.
+ */
+
+void print_human_readable_size(u64 size)
+{
+	const char *units[] = { "B", "KB", "MB", "GB", "TB" };
+	u32 unit_index = 0;
+
+	while (size >= 1024 && unit_index < 4) {
+		size /= 1024;
+		unit_index++;
+	}
+	console::get().writef("%llu %s\n", size, units[unit_index]);
 }
 
 /**
@@ -108,7 +131,11 @@ void ls::print_ls_result(const final_product &result, u8 flags)
 			}
 
 			if (entry.type == fs_node_kind::file) {
-				console::get().writef("%llu\n", entry.size);
+				if (flags & LS_FLAG_HUMAN_READABLE) {
+					print_human_readable_size(entry.size);
+				} else {
+					console::get().writef("%llu\n", entry.size);
+				}
 			} else {
 				console::get().writef("\n");
 			}
@@ -123,7 +150,7 @@ int main(const char *cmdline)
 {
 	// Validate command line arguments
 	if (cmdline == nullptr || cmdline[0] == '\0') {
-		console::get().write("Usage: ls [-lahr] <path>\n");
+		console::get().write("Usage: ls [-l] [-a] [-R] [-h] <path>\n");
 		return 1;
 	}
 
@@ -148,7 +175,7 @@ int main(const char *cmdline)
 				flags |= LS_FLAG_RECURSIVE;
 				break;
 			default:
-				console::get().write("error: usage: ls [-lahr] <path>\n");
+				console::get().write("error: usage: ls [-l] [-a] [-R] [-h] <path>\n");
 				return 1;
 			}
 			cmdline++; // move to the next flag character
@@ -162,13 +189,19 @@ int main(const char *cmdline)
 
 	// Ensures that the path is not empty after checking the flags
 	if (*cmdline == '\0') {
-		console::get().write("error: usage: ls [-lahr] <path>\n");
+		console::get().write("error: usage: ls [-l] [-a] [-R] [-h] <path>\n");
 		return 1;
 	}
 
 	// There's a path (or what looks like it). Ensure path is absolute since we do not support relative paths nor current directory.
 	if (cmdline[0] != '/') {
 		console::get().write("error: All passed paths must be absolute\n");
+		return 1;
+	}
+
+	// The -h flag requires the -l flag to be set as well.
+	if (flags & LS_FLAG_HUMAN_READABLE && !(flags & LS_FLAG_LONG_LISTING)) {
+		console::get().write("error: The -h flag requires the -l flag to be set as well.\n");
 		return 1;
 	}
 
