@@ -56,6 +56,10 @@ public:
 
 	virtual ~fat_node() { }
 
+	/**
+	 * Returns the list of children of this node
+	 */
+
 	virtual list<fat_node *> &children()
 	{
 		if (!loaded_) {
@@ -96,6 +100,11 @@ public:
 	virtual ~fat_filesystem() { }
 
 	virtual fs_node &root() override { return root_; }
+
+	/**
+	 * Used this to identify the filesystem type and to specifically
+	 * make sure that the node is part of the FAT filesystem.
+	 */
 	virtual fs_type_hint type_hint() const override { return fs_type_hint::fat; }
 
 private:

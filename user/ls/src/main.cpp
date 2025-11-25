@@ -87,6 +87,7 @@ int main(const char *cmdline)
 		return 1;
 	}
 
+	// Allocate the result structure and read from the device as a file to print and return.
 	final_product result;
 	size_t bytes_read = file->pread(&result, sizeof(final_product), 0);
 

@@ -186,11 +186,17 @@ extern "C" syscall_result handle_syscall(syscall_numbers index, u64 arg0, u64 ar
 		return syscall_result { syscall_result_code::ok, 0 };
 	}
 
+		/**
+		 * Handles the 'ls' syscall, which lists the contents of a directory specified by the user.
+		 * It takes two arguments: a pointer to the directory path in user space and flags modifying the behavior of the listing.
+		 */
+
 	case syscall_numbers::ls_syscall: {
 		// Cast the user space pointers
 		const char *path_ptr = (const char *)arg0;
 		u8 flags = (u8)arg1;
 
+		// Get the device manager singleton and invoke the ls device to compute the directory listing.
 		auto &dm = stacsos::kernel::dev::device_manager::get();
 
 		dm.get_device_by_name<stacsos::kernel::dev::misc::ls>("ls-device0").compute_ls(path_ptr, flags);

@@ -47,6 +47,7 @@ static void init_console()
 	auto rtc = new cmos_rtc(dm.sysbus());
 	dm.register_device(*rtc);
 
+	// Registers the LS device, which provides the functionality for the 'ls' syscall.
 	auto ls_dev = new ls_device(dm.sysbus());
 	dm.register_device(*ls_dev);
 

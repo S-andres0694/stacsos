@@ -7,6 +7,9 @@
  *
  * It aims to increase the performance of repeated 'ls' calls
  * on the same directory path by caching the results.
+ *
+ * The cache has a maximum size, and evicts the oldest
+ * entries when the size is exceeded.
  */
 
 #include <stacsos/list.h>
