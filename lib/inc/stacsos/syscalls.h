@@ -17,7 +17,8 @@
 #define LS_FLAG_LONG_LISTING (1 << 0) // Flag for long listing format. The bitfield would be 00000001
 #define LS_FLAG_ALL_FILES (1 << 1) // Includes hidden files (those starting with a dot).
 #define LS_FLAG_HUMAN_READABLE (1 << 2) // Displays file sizes in a human-readable format (e.g., KB, MB).
-#define LS_FLAG_RECURSIVE (1 << 3) // Lists subdirectories of a directory recursively.
+#define LS_FLAG_SORT_BY_SIZE (1 << 3) // Sorts the output by file size instead of name.
+#define LS_FLAG_SORT_BY_NAME (1 << 4) // Sorts the output by name.
 
 namespace stacsos {
 enum class syscall_result_code : u64 { ok = 0, not_found = 1, not_supported = 2 };
@@ -43,6 +44,12 @@ enum class syscall_numbers {
 	ioctl = 17,
 	ls_syscall = 18
 };
+
+/**
+ * Sorting modes for the S flag and the SSize in the 'ls' command
+ */
+
+typedef enum { SORT_BY_NAME, SORT_BY_SIZE } sort_mode;
 
 struct syscall_result {
 	syscall_result_code code;

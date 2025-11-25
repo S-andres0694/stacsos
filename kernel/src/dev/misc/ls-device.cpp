@@ -3,15 +3,15 @@
 #include <stacsos/kernel/fs/fat.h>
 #include <stacsos/kernel/fs/vfs.h>
 
-
 using namespace stacsos::kernel::dev;
 using namespace stacsos::kernel::dev::misc;
 using namespace stacsos::kernel::fs;
 
 device_class ls_device::ls_device_class(ls::ls_device_class, "ls-device");
 
-void ls_device::compute_ls(const char* path, u8 flags) {
-    if (stacsos::memops::strcmp(path, this->last_lookup_path) == 0) {
+void ls_device::compute_ls(const char *path, u8 flags)
+{
+	if (stacsos::memops::strcmp(path, this->last_lookup_path) == 0) {
 		dprintf("Path matches last lookup path: %s\n", path);
 		return;
 	}
@@ -38,7 +38,7 @@ void ls_device::compute_ls(const char* path, u8 flags) {
 	stacsos::string path_str(path);
 	if (this->cache_.lookup(path_str, cache_ent)) {
 		// Make sure the cache entry is not dirty
-		if (node ->dirty_cache_bit) {
+		if (node->dirty_cache_bit) {
 			dprintf("Cache entry is dirty for path: %s\n", path);
 		} else {
 			dprintf("Cache hit for path: %s\n", path);
@@ -85,10 +85,13 @@ void ls_device::compute_ls(const char* path, u8 flags) {
 
 	for (const auto &child : fat_dir_node.children()) {
 		u64 idx = this->prod.result.number_entries;
+
+		dprintf("Processing child node: %s\n", child->name().c_str());
+
 		// Prevent overflow of the entries buffer
 		if (idx >= MAX_RESULT_ENTRIES) {
 			dprintf("[WARN] Too many directory entries — skipping '%s'\n", child->name().c_str());
-			continue;
+			break;
 		}
 		directory_entry &entry = this->prod.entries[idx];
 		// Copy name safely
