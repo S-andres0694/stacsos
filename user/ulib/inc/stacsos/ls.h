@@ -15,93 +15,6 @@ class ls {
 public:
 	static void ls_syscall_wrapper(const char *path, u8 flags);
 
-	static ls_result new_ls_result();
-
-	/**
-	 * Helper function to determine the maximum name length among directory entries.
-	 * This is used for formatting the output in long listing mode.
-	 *
-	 * @param result The ls_result structure containing directory entries.
-	 * @return The maximum length of the names of the entries.
-	 */
-	static u32 get_max_name_length(const final_product &result)
-	{
-		u32 max_len = 0;
-		for (u64 i = 0; i < result.result.number_entries; i++) {
-			const directory_entry &entry = result.entries[i];
-			u32 len = memops::strlen(entry.name);
-			if (len > max_len) {
-				max_len = len;
-			}
-		}
-		return max_len;
-	}
-
-	/**
-	 * Allows for an optimized printing for the -h flag (human-readable file sizes).
-	 * It does so by converting the size in bytes to a more human-friendly format.
-	 * Heavily inspired by https://stackoverflow.com/questions/281640/how-do-i-get-a-human-readable-file-size-in-bytes-abbreviation-using-net
-	 * answer by Adrian Hum.
-	 * The function has a small invariance within the precision. Because the OS does not seem to support floating-point operations, the precision margin of this
-	 * function is limited.
-	 * @param size The size in bytes.
-	 */
-
-	static void print_human_readable_size(u64 size)
-	{
-		const char *units[] = { "B", "KB", "MB", "GB", "TB" };
-		u32 unit_index = 0;
-
-		while (size >= 1024 && unit_index < 4) {
-			size /= 1024;
-			unit_index++;
-		}
-		console::get().writef("%llu %s\n", size, units[unit_index]);
-	}
-
-	/**
-	 * Simple bubble sort implementation to sort directory entries.
-	 * This is used to sort the entries based on name or size.
-	 * @param entries The array of directory entries to sort.
-	 * @param count The number of entries in the array.
-	 * @param mode The sorting mode (by name or by size).
-	 */
-
-	static void bubble_sort(directory_entry *entries, u64 count, sort_mode mode)
-	{
-		if (count <= 1)
-			return;
-
-		for (u32 i = 0; i < count - 1; i++) {
-			bool swapped = false;
-
-			for (u32 j = 0; j < count - i - 1; j++) {
-				bool should_swap = false;
-
-				if (mode == SORT_BY_NAME) {
-					if (memops::strcmp(entries[j].name, entries[j + 1].name) > 0) {
-						should_swap = true;
-					}
-				} else if (mode == SORT_BY_SIZE) {
-					if (entries[j].size > entries[j + 1].size) {
-						should_swap = true;
-					}
-				}
-
-				if (should_swap) {
-					directory_entry tmp = entries[j];
-					entries[j] = entries[j + 1];
-					entries[j + 1] = tmp;
-					swapped = true;
-				}
-			}
-
-			// Optimization: stop if already sorted
-			if (!swapped)
-				break;
-		}
-	}
-
 	/**
 	 * Function to print the results of the 'ls' syscall based on the provided flags.
 	 *
@@ -203,6 +116,92 @@ public:
 				// Simple listing format
 				console::get().writef("%s\n", entry.name);
 			}
+		}
+	}
+
+private:
+	/**
+	 * Helper function to determine the maximum name length among directory entries.
+	 * This is used for formatting the output in long listing mode.
+	 *
+	 * @param result The ls_result structure containing directory entries.
+	 * @return The maximum length of the names of the entries.
+	 */
+	static u32 get_max_name_length(const final_product &result)
+	{
+		u32 max_len = 0;
+		for (u64 i = 0; i < result.result.number_entries; i++) {
+			const directory_entry &entry = result.entries[i];
+			u32 len = memops::strlen(entry.name);
+			if (len > max_len) {
+				max_len = len;
+			}
+		}
+		return max_len;
+	}
+
+	/**
+	 * Allows for an optimized printing for the -h flag (human-readable file sizes).
+	 * It does so by converting the size in bytes to a more human-friendly format.
+	 * Heavily inspired by https://stackoverflow.com/questions/281640/how-do-i-get-a-human-readable-file-size-in-bytes-abbreviation-using-net
+	 * answer by Adrian Hum.
+	 * The function has a small invariance within the precision. Because the OS does not seem to support floating-point operations, the precision margin of this
+	 * function is limited.
+	 * @param size The size in bytes.
+	 */
+
+	static void print_human_readable_size(u64 size)
+	{
+		const char *units[] = { "B", "KB", "MB", "GB", "TB" };
+		u32 unit_index = 0;
+
+		while (size >= 1024 && unit_index < 4) {
+			size /= 1024;
+			unit_index++;
+		}
+		console::get().writef("%llu %s\n", size, units[unit_index]);
+	}
+
+	/**
+	 * Simple bubble sort implementation to sort directory entries.
+	 * This is used to sort the entries based on name or size.
+	 * @param entries The array of directory entries to sort.
+	 * @param count The number of entries in the array.
+	 * @param mode The sorting mode (by name or by size).
+	 */
+
+	static void bubble_sort(directory_entry *entries, u64 count, sort_mode mode)
+	{
+		if (count <= 1)
+			return;
+
+		for (u32 i = 0; i < count - 1; i++) {
+			bool swapped = false;
+
+			for (u32 j = 0; j < count - i - 1; j++) {
+				bool should_swap = false;
+
+				if (mode == SORT_BY_NAME) {
+					if (memops::strcmp(entries[j].name, entries[j + 1].name) > 0) {
+						should_swap = true;
+					}
+				} else if (mode == SORT_BY_SIZE) {
+					if (entries[j].size > entries[j + 1].size) {
+						should_swap = true;
+					}
+				}
+
+				if (should_swap) {
+					directory_entry tmp = entries[j];
+					entries[j] = entries[j + 1];
+					entries[j + 1] = tmp;
+					swapped = true;
+				}
+			}
+
+			// Optimization: stop if already sorted
+			if (!swapped)
+				break;
 		}
 	}
 };

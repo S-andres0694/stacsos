@@ -1,6 +1,6 @@
+#include <stacsos/console.h>
 #include <stacsos/ls.h>
 #include <stacsos/user-syscall.h>
-#include <stacsos/console.h>
 
 using namespace stacsos;
 
@@ -12,21 +12,4 @@ using namespace stacsos;
  * @return An ls_result structure containing the results of the 'ls' operation.
  */
 
-void ls::ls_syscall_wrapper(const char *path, u8 flags)
-{
-	syscalls::ls_syscall(path, flags);
-}
-
-/**
- * Creates a new ls_result structure initialized to default values.
- * @return A new ls_result structure with default values.
- */
-
-ls_result ls::new_ls_result()
-{
-	ls_result result;
-	result.code = syscall_result_code::ok;
-	result.result_code = ls_result_code::ok;
-	result.number_entries = 0;
-	return result;
-}
+void ls::ls_syscall_wrapper(const char *path, u8 flags) { syscalls::ls_syscall(path, flags); }
