@@ -46,7 +46,7 @@ enum class syscall_numbers {
 };
 
 /**
- * Sorting modes for the S flag and the SSize in the 'ls' command
+ * Sorting modes for the S flag and the N flag in the 'ls' command
  */
 
 typedef enum { SORT_BY_NAME, SORT_BY_SIZE } sort_mode;
@@ -105,6 +105,7 @@ struct final_product {
 	ls_result result;
 	directory_entry entries[MAX_RESULT_ENTRIES];
 
+	// Copy assignment operator
 	final_product &operator=(const final_product &other)
 	{
 		if (this != &other) {
@@ -116,6 +117,7 @@ struct final_product {
 
 	final_product() = default;
 
+	// Copy constructor
 	final_product(const final_product &other)
 	{
 		this->result = other.result;

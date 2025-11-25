@@ -151,21 +151,6 @@ public:
 	void dump() const { do_dump(root_); }
 
 	/**
-	 * Returns the number of nodes in the tree.
-	 * In my case, I use it to get the count of cached entries.
-	 * for my ls_cache implementation.
-	 */
-
-	size_t size() const
-	{
-		size_t count = 0;
-		for (auto it = begin(); it != end(); ++it) {
-			count++;
-		}
-		return count;
-	}
-
-	/**
 	 * Erase a node by key.
 	 * Returns true if a node was removed, false if not found.
 	 */

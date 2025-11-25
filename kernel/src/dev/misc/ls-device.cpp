@@ -119,7 +119,7 @@ void ls_device::compute_ls(const char *path, u8 flags)
 	this->last_lookup_path[sizeof(this->last_lookup_path) - 1] = '\0';
 	dprintf("Last lookup path updated to: %s\n", this->last_lookup_path);
 
-	// Mark the cache as clean
+	// Mark the directory node as clean
 	node->dirty_cache_bit = false;
 
 	dprintf("Cached ls result for path: %s\n", path);
