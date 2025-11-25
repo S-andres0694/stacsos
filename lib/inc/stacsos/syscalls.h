@@ -65,15 +65,6 @@ enum class fs_node_kind { file, directory };
 // I use these codes to indicate the specific failure reason so the console can handle it appropriately.
 enum class ls_result_code { ok = 0, directory_does_not_exist = 1, file_was_passed = 2, unknown_error = 3, directory_empty = 4, unsupported_filesystem = 5 };
 
-// 'ls' syscall request structure - used to pass parameters from user space to kernel space
-typedef struct ls_syscall_request {
-	// The path to list
-	char *path;
-
-	// Flags for the ls command
-	u8 flags;
-} ls_syscall_request;
-
 // Directory entry structure - shared between kernel and user space
 typedef struct directory_entry {
 	// The name of the file/directory that is being represented
